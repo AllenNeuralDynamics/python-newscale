@@ -3,6 +3,8 @@
 import socket
 from newscale.stages import M3_LS_34_15_XYZ_PoE as Stage
 
+socket.setdefaulttimeout(1) # 1 second timeout
+
 IP = '10.128.49.22'
 PORT = 23
 
