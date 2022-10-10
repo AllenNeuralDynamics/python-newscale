@@ -7,7 +7,7 @@ from enum import Enum
 try:
     from enum import StrEnum  # a 3.11 freature.
 except ImportError:
-    logging.error("StrEnum not available with this version of python."
+    logging.error("StrEnum not available with this version of python. "
                   "Creating it.")
 
     class StrEnum(str, Enum):
@@ -42,6 +42,14 @@ class Cmd(StrEnum):
     POSITION_CONTROL_LOG = "A9"
 
 
+# Note: we can't use struct.unpack since the replies come in non-ctype
+#   size signed and unsigned values (example: 24-bit signed integer).
+ReplyEncoding = \
+{
+    Cmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32"
+}
+
+
 class StateBit(Enum):
     """Bitfield offsets for interpretting commands <10> and <19>"""
     RESERVED_0 = 0
@@ -71,10 +79,9 @@ class StateBit(Enum):
 
 
 class Direction(StrEnum):
-    BACKWARD = 0
-    FORWARD = 1
-
-
+    BACKWARD = "0"
+    FORWARD = "1"
+    NEITHER = "N"
 
 
 
