@@ -1,18 +1,17 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
-import socket
-from newscale.stages import M3_LS_34_15_XYZ_PoE as Stage
+from newscale.stages import M3LinearSmartStage
+from newscale.device_codes import Direction
+from newscale.interfaces import MockInterface
+from time import sleep
+import logging
 
-socket.setdefaulttimeout(1) # 1 second timeout
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 
-IP = '10.128.49.22'
-PORT = 23
-
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect((IP, PORT))
-
-stage = Stage(sock)
-fw_version = stage.readFirmwareVersion()
-print('Firmware Version: ', fw_version)
-stage.close()
+stage = M3LinearSmartStage(MockInterface())
+print("running stage.")
+stage.run(Direction.FORWARD, 3)
+sleep(0.5)
+stage.run(Direction.BACKWARD, 3)
 

@@ -57,7 +57,7 @@ ReplyParameterEncoding = \
     Cmd.SOFT_LIMIT_STATES: "uint:4",
     Cmd.TIME_INTERVAL_UNITS: "uint:12, uint:16",
     Cmd.BAUD_RATE: "uint:4, uint:8",  # TODO: make a baud rate Enum
-    Cmd.EEPROM_WRITING_STATE: "uint:8, uint:4"
+    Cmd.EEPROM_WRITING_STATE: "uint:8, uint:4",
     Cmd.RUN_FREQ_CALIBRATION: "uint:4, uint:8, uint:8",
     #Cmd.POSITION_CONTROL_LOG: ""
 }
