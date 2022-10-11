@@ -4,26 +4,87 @@ This class is a collection of functions that return valid input strings that
 can be sent to the hardware by some interface (USB, PoE, SPI, I2C).
 """
 
-# General approach for unpacking replies will probably be something like:
-# >>> my_bit_array = BitArray(hex='FFFFFF 00000001 00000002')
-# >>> my_bit_array.unpack('int:24, int:32, int:32')
-
 import logging
 from bitstring import Bits  # for unpacking
-#from newscale.device_codes import Cmd, StateBit, Direction
-#from newscale.interfaces import Interface
-from device_codes import Cmd, StateBit, Direction, Encoding
-
+from newscale.device_codes import Cmd, StateBit, Direction
+from newscale.interfaces import Interface
 
 # Constants
 TICKS_PER_UM = 2.0  # encoder ticks per micrometer.
 TICKS_PER_MM = TICKS_PER_UM * 1000.
 
 
-class USBXYZStage:
+# Decorators
+def axis_check(func, *args_to_skip: str):
+    """Ensure that the axis (specified as an arg or kwarg) exists."""
 
-    def __init__(self, port: None, serial_interface: SerialInterface = None):
-        self.interface = Serial if serial_interface else SerialInterface(port)
+    def inner(self, *args, **kwargs):
+        # Sanitize input to all-lowercase.
+        args = [a.lower() for a in args]
+        kwargs = {k.lower(): v for k, v in kwargs.items()}
+        # Combine args and kwarg names; skip double-adding params specified as
+        # one or the other.
+        iterable = [a for a in args if a not in kwargs] + list(kwargs.keys())
+        for arg in iterable:
+            # Skip pre-specified args.
+            if arg in args_to_skip:
+                continue
+            assert arg.lower() not in self.stages, \
+                f"Error. Axis '{arg.upper()}' does not exist"
+        return func(self, *args, **kwargs)
+    return inner
+
+
+class MultiStage:
+    """A conglomerate of many stages from many interfaces."""
+
+    def __init__(self, **stages):
+        self.stages = stages
+
+    @axis_check('sequential')
+    def move_absolute(self, **axes):
+        """Move the specified axes by the specified amounts."""
+        pass
+
+    @axis_check('sequential')
+    def move_relative(self, **axes):
+        pass
+
+    @axis_check('sequential')
+    def move_for_time(self, sequential: bool = False, **axes: float):
+        """Move axes specified for the corresponding amount of time in seconds.
+
+        :param sequential: If true, move the axes one at time. Otherwise, kick
+            off each move as close to simultaneously as possible.
+        :param axes: the axis and its corresponding time to move.
+        """
+        pass
+
+    @axis_check
+    def get_position(self, *axes):
+        """Retrieve the specified axes positions as a dict, or get all
+        positions if none are specified.
+
+        ..code_block::
+            get_position('x', 'y', 'z')  # Get specified positions OR
+            get_position()  # Get all positions.
+        """
+        if len(axes) == 0:  # return all axes if None are specified.
+            axes = self.stages.keys()
+        return {k: self.stages[k].get_position() for k in axes}
+
+    @axis_check
+    def halt(self, axis):
+        pass
+
+
+class USBXYZStage(MultiStage):
+    """An XYZ Stage from a single USB interface."""
+
+    def __init__(self, port: str = None,
+                 serial_interface: SerialInterface = None):
+        self.interface = serial_interface if serial_interface and not port \
+            else SerialInterface(port)
         # Create 3 stages.
         stages = {'x': M3LinearSmartStage('01', self.interface),
                   'y': M3LinearSmartStage('02', self.interface),
@@ -31,22 +92,22 @@ class USBXYZStage:
         super().__init__(**stages)
 
 
-class MultiStage:
+class PoEXYZStage(MultiStage):
+    """An XYZ Stage from a single Power-over-Ethernet interface."""
 
-    def __init__(self, **stages):
-        self.stages = stages
-
-    def move_absolute(self, **axes):
-        pass
-
-    def move_relative(self, **axes):
-        pass
-
-    def halt(self):
-        pass
+    def __init__(self, address: str = None,
+                 socket_interface: PoEInterface = None):
+        self.interface = socket_interface if socket_interface and not address \
+            else PoEInterface(address)
+        # Create 3 stages.
+        stages = {'x': M3LinearSmartStage('01', self.interface),
+                  'y': M3LinearSmartStage('02', self.interface),
+                  'z': M3LinearSmartStage('03', self.interface)}
+        super().__init__(**stages)
 
 
 class M3LinearSmartStage:
+    """A single axis stage on an interface."""
 
     def __init__(self, address: str = None, interface: Interface = None,
                  create: bool = False):
@@ -73,6 +134,9 @@ class M3LinearSmartStage:
         # Case-Dependent behavior for replies with additional words.
         if cmd == Cmd.FIRMWARE_VERSION:  # The trailing words form a message.
             return cmd, cmd_chunks[1]
+        # General approach for unpacking replies will probably look like:
+        # >>> my_bit_array = BitArray(hex='FFFFFF 00000001 00000002')
+        # >>> my_bit_array.unpack('int:24, int:32, int:32')
         else:  # Everything else returns one or more ints of various sizes.
             bit_array = BitArray(hex=cmd_chunks[1])
             return cmd, *bit_array.unpack(ReplyEncoding[cmd])
@@ -186,12 +250,3 @@ class M3LinearSmartStage:
     def set_soft_limit_values(self, min_value, max_value):
         # FIXME
         return get_cmd_str(Cmd.SOFT_LIMIT_VALUES, min_value, max_value)
-
-
-if __name__ == "__main__":
-    print("Enable motor:")
-    print(run(Direction.FORWARD, 10))
-    print("Move to target:")
-    print(move_to_target(50.0))
-    print("Set Open Loop Speed:")
-    print(set_open_loop_speed(100.0))
