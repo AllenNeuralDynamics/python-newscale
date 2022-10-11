@@ -6,7 +6,8 @@ can be sent to the hardware by some interface (USB, PoE, SPI, I2C).
 
 import logging
 from bitstring import Bits  # for unpacking
-from newscale.device_codes import Cmd, StateBit, Direction
+from newscale.device_codes import Cmd, StateBit, Direction, \
+    ReplyParameterEncoding
 from newscale.interfaces import Interface
 
 # Constants
@@ -38,8 +39,10 @@ def axis_check(func, *args_to_skip: str):
 class MultiStage:
     """A conglomerate of many stages from many interfaces."""
 
-    def __init__(self, **stages):
-        self.stages = stages
+    def __init__(self, **stages: M3LinearSmartStage):
+        self.log = logging.getLogger(f"{__name__}.{self.__classs__.name}")
+        # Sanitize input to lowercase.
+        self.stages = {k.lower(): v for k, v in stages.items()}
 
     @axis_check('sequential')
     def move_absolute(self, **axes):
@@ -130,6 +133,10 @@ class M3LinearSmartStage:
         cmd_chunks = reply.split(" ", 1)  # split on the first space.
         cmd = Cmd(cmd_chunks[0])
         if len(cmd_chunks) == 1:
+            if cmd in [Cmd.ILLEGAL_COMMAND, Cmd.ILLEGAL_COMMAND_FORMAT]:
+                error_msg = f"Device replied with: {cmd.name}."
+                self.log.error(error_msg)
+                raise RuntimeError(error_msg)
             return cmd
         # Case-Dependent behavior for replies with additional words.
         if cmd == Cmd.FIRMWARE_VERSION:  # The trailing words form a message.
@@ -139,7 +146,7 @@ class M3LinearSmartStage:
         # >>> my_bit_array.unpack('int:24, int:32, int:32')
         else:  # Everything else returns one or more ints of various sizes.
             bit_array = BitArray(hex=cmd_chunks[1])
-            return cmd, *bit_array.unpack(ReplyEncoding[cmd])
+            return cmd, *bit_array.unpack(ReplyParameterEncoding[cmd])
 
     def _send(self, cmd_str: str):
         """Send a command and return the parsed reply."""
@@ -149,11 +156,11 @@ class M3LinearSmartStage:
     # <01>
     def get_firmware_version(self):
         """Get the firmware version."""
-        return self._send(get_cmd_str(Cmd.FIRMWARE_VERSION))
+        return self._send(self._get_cmd_str(Cmd.FIRMWARE_VERSION))
 
     # <03>
     def halt(self):
-        return self._send(get_cmd_str(Cmd.HALT))
+        return self._send(self._get_cmd_str(Cmd.HALT))
 
     # <04>
     def run(self, direction: Direction, seconds: float = None):
@@ -166,10 +173,10 @@ class M3LinearSmartStage:
         assert direction is not Direction.NEITHER, \
             "Direction must be forward or reverse."
         if seconds is None:
-            return self._send(get_cmd_str(Cmd.RUN, direction.value))
+            return self._send(self._get_cmd_str(Cmd.RUN, direction.value))
         duration = round(seconds*10) # value is encoded in tenths of seconds.
         assert duration < 256, "Time input value exceeds maximum value."
-        return self._send(get_cmd_str(Cmd.RUN, direction.value,
+        return self._send(self._get_cmd_str(Cmd.RUN, direction.value,
                                       f"{duration:04x}"))
 
     # <05>
@@ -187,8 +194,9 @@ class M3LinearSmartStage:
         """
         step_size_ticks = round(step_size_mm*TICKS_PER_MM)  # 32 bit unsigned.
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
-        return self._send(get_cmd_str(Cmd.STEP_CLOSED_LOOP, direction.value,
-                          f"{step_size_ticks:08x}"))
+        return self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,
+                                            direction.value,
+                                            f"{step_size_ticks:08x}"))
 
     # <06> variant
     def set_distance_step_size(self, step_size_mm: float):
@@ -204,17 +212,17 @@ class M3LinearSmartStage:
         """
         # TODO: convert target setpoint to encoder ticks.
         if setpoint_mm is None:
-            return get_cmd_str(Cmd.MOVE_TO_TARGET)
+            return self._get_cmd_str(Cmd.MOVE_TO_TARGET)
         step_size_ticks = round(setpoint_mm*TICKS_PER_MM)
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
-        return self._send(get_cmd_str(Cmd.MOVE_TO_TARGET,
+        return self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET,
                                       f"{step_size_ticks:08x}"))
 
     # <09>
     def set_open_loop_speed(self, percentage: float):
         speed_byte = round(percentage/100 * 255)
         assert 1 < speed_byte < 256, "speed setting out of range."
-        return self._send(get_cmd_str(Cmd.SPEED_OPEN_LOOP,
+        return self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED,
                                       f"{speed_byte:02x}"))
 
     # <10>
@@ -249,4 +257,4 @@ class M3LinearSmartStage:
     # <46>
     def set_soft_limit_values(self, min_value, max_value):
         # FIXME
-        return get_cmd_str(Cmd.SOFT_LIMIT_VALUES, min_value, max_value)
+        return self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES, min_value, max_value)

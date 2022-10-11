@@ -23,7 +23,7 @@ class Cmd(StrEnum):
     STEP_CLOSED_LOOP = "06"  # Step for a fixed distance
     TOGGLE_ABS_REL = "07"
     MOVE_TO_TARGET = "08"  # Move to a specified setpoint
-    SPEED_OPEN_LOOP = "09"
+    OPEN_LOOP_SPEED = "09"
     CLOSED_LOOP_STATE = "10"
     MOTOR_STATUS = "19"
     DRIVE_MODE = "20"
@@ -38,15 +38,28 @@ class Cmd(StrEnum):
     BAUD_RATE = "54"
     EEPROM_WRITING_STATE = "58"
     SAVE_CLOSED_LOOP_STATE_TO_EEPROM = "74"
-    DO_FREQ_CALIBRATION = "87"
+    RUN_FREQ_CALIBRATION = "87"
     POSITION_CONTROL_LOG = "A9"
 
 
-# Note: we can't use struct.unpack since the replies come in non-ctype
+# Note: We can't use struct.unpack since the replies come in non-ctype
 #   size signed and unsigned values (example: 24-bit signed integer).
-ReplyEncoding = \
+ReplyParameterEncoding = \
 {
-    Cmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32"
+    Cmd.MOVE_TO_TARGET: "int:32",
+    Cmd.OPEN_LOOP_SPEED: "uint:8",
+    Cmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32",
+    Cmd.MOTOR_STATUS: "uint:16",
+    Cmd.DRIVE_MODE: "uint:4 uint:16",  # TODO: check if we get 'R' as a reply back from the controller.
+    Cmd.ERROR_THRESHOLDS_AND_STALL_DETECTION: "uint:1, int:24, int:24",
+    Cmd.PID_COEFFICIENTS: "int:16, int:16, int:16",
+    Cmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
+    Cmd.SOFT_LIMIT_STATES: "uint:4",
+    Cmd.TIME_INTERVAL_UNITS: "uint:12, uint:16",
+    Cmd.BAUD_RATE: "uint:4, uint:8",  # TODO: make a baud rate Enum
+    Cmd.EEPROM_WRITING_STATE: "uint:8, uint:4"
+    Cmd.RUN_FREQ_CALIBRATION: "uint:4, uint:8, uint:8",
+    #Cmd.POSITION_CONTROL_LOG: ""
 }
 
 
