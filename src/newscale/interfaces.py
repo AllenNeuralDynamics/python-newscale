@@ -68,26 +68,26 @@ class SerialInterface(HardwareInterface):
         self.log.debug(f"Transceiver firmware: {reply}")
 
     def _select_stage(self, address: str):
-        """Select the stage from the hub or skip if it is already conneted."""
+        """Select the stage from the hub or skip if it is already connected."""
         # Select the current stage we're talking to before issuing commands.
         #   i.e: if we've not communicated with this address last, select it.
-        if self.last_address != address:
-            self.log.debug(f"Selecting stage at address: {address}")
-            self.last_address = address
-            msg = f"TR<A0 {address}>\r"
-            self.send(msg)
-            reply = self.read()
-            device_present = True if reply.strip("<>\r").split()[-1] == "1" \
-                else False
-            if not device_present:
-                raise RuntimeError(f"Device at address {address} is not "
-                                   "present on this interface.")
-        else:
-            self.log.debug("Address already selected at hub level.")
+        self.log.debug(f"Selecting stage at address: {address}")
+        self.last_address = address
+        msg = f"TR<A0 {address}>\r"
+        self.send(msg)
+        reply = self.read()
+        device_present = True if reply.strip("<>\r").split()[-1] == "1" \
+            else False
+        if not device_present:
+            raise RuntimeError(f"Device at address {address} is not "
+                               "present on this interface.")
 
     def send(self, msg: str, address: str = None):
         if address is not None:
-            self._select_stage(address)
+            if self.last_address != address:
+                self._select_stage(address)
+            else:
+                self.log.debug("Address already selected at hub level.")
         # Detect Transceiver-only command and re-encode it. Otherwise, pass
         # the message through.
         # Note: this implementation does NOT handle "command prefixes" if any
