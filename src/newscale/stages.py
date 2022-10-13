@@ -1,7 +1,7 @@
 """Interface-agnostic classes to create manipulator cmds and interpret replies."""
 
 import logging
-from bitstring import Bits  # for unpacking
+from bitstring import BitArray  # for unpacking
 from newscale.device_codes import Cmd, StateBit, Direction, \
     ReplyParameterEncoding
 from newscale.interfaces import HardwareInterface, SerialInterface, \
@@ -66,7 +66,7 @@ class M3LinearSmartStage:
     # <01>
     def get_firmware_version(self):
         """Get the firmware version."""
-        return self._send(self._get_cmd_str(Cmd.FIRMWARE_VERSION))
+        return self._send(self._get_cmd_str(Cmd.FIRMWARE_VERSION))[-1]
 
     # <03>
     def halt(self):
@@ -147,21 +147,23 @@ class M3LinearSmartStage:
     def _parse_state(state: int):
         """Convert state integer (<10> reply) to dict keyed by state bit."""
         # Convert int to array of bits
-        state_bits = [True if digit == '1' else False for digit in bin(n)[2:]]
+        state_bits = [True if digit == '1' else False
+                      for digit in bin(state)[2:]]
         # Iterate through StateBit Enum and reply to create a dict
         return {k: v for k, v in zip(StateBit, state_bits)
                 if not k.name.startswith('RESERVED')}
 
     # <19>
     def get_motor_status(self):
-        _, state_int = _send(self._get_cmd_str(Cmd.MOTOR_STATUS))
+        _, state_int = self._send(self._get_cmd_str(Cmd.MOTOR_STATUS))
         return self._parse_motor_flags(state_int)
 
     @staticmethod
     def _parse_motor_flags(state: int):
         """Convert Motor Flags integer (<19> reply) to dict keyed by state bit
         """
-        state_bits = [True if digit == '1' else False for digit in bin(n)[2:]]
+        state_bits = [True if digit == '1' else False
+                      for digit in bin(state)[2:]]
         state_bit_subset = list(StateBit)[:16]
         return {k: v for k, v in zip(state_bit_subset, state_bits)
                 if not k.name.startswith('RESERVED')}

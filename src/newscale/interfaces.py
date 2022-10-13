@@ -107,7 +107,10 @@ class SerialInterface(HardwareInterface):
 
     def read(self, address: str = None):
         if address is not None:
-            self._select_stage(address)
+            if self.last_address != address:
+                self._select_stage(address)
+            else:
+                self.log.debug("Address already selected at hub level.")
         data = self.ser.read_until(b'\r').decode('utf8')
         address_msg = f"On address: '{address}', r" if address else "R"
         self.log.debug(f"{address_msg}ead back {repr(data)}")
