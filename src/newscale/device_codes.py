@@ -50,7 +50,8 @@ ReplyParameterEncoding = \
     Cmd.OPEN_LOOP_SPEED: "uint:8",
     Cmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32",
     Cmd.MOTOR_STATUS: "uint:16",
-    Cmd.DRIVE_MODE: "uint:4 uint:16",  # TODO: check if we get 'R' as a reply back from the controller.
+    Cmd.DRIVE_MODE: "uint:4, uint:16",  # TODO: check if we get 'R' as a reply back from the controller.
+    Cmd.CLOSED_LOOP_SPEED: "int:24, uint:24, int:24, uint:16",
     Cmd.ERROR_THRESHOLDS_AND_STALL_DETECTION: "uint:1, int:24, int:24",
     Cmd.PID_COEFFICIENTS: "int:16, int:16, int:16",
     Cmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
