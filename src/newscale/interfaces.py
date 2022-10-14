@@ -2,6 +2,8 @@
 
 import logging
 from abc import ABC, abstractmethod
+from newscale.device_codes import TransceiverCmd as Cmd
+from newscale.device_codes import TRANSCEIVER_PREFIX, parse_tr_reply
 from serial import Serial
 from socket import socket
 
@@ -20,14 +22,14 @@ class HardwareInterface:
         #   i.e: if we've not communicated with this address last, select it.
         self.log.debug(f"Selecting stage at address: {address}")
         self.last_address = address
-        # TODO: _get_cmd_str here.
-        msg = f"TR<A0 {address}>\r"
+        # TODO: Consider writing a _get_cmd_str instead of formatting here.
+        msg = f"{TRANSCEIVER_PREFIX}<{Cmd.STAGE_SELECT} {address}>\r"
         self.send(msg)
-        reply = self.read()
+        cmd, stage_address, device_present = parse_tr_reply(self.read())
         # TODO: _parse_msg here.
-        device_present = True if reply.strip("<>\r").split()[-1] == "1" \
-            else False
-        if not device_present:
+        #device_present = True if reply.strip("<>\r").split()[-1] == "1" \
+        #    else False
+        if not (device_present == 1):
             raise RuntimeError(f"Device at address {address} is not "
                                "present on this interface.")
 
@@ -80,9 +82,10 @@ class SerialInterface(HardwareInterface):
         self.last_address = None
         # Establish connection with the hub.
         self.log.debug("Connecting to serial interface.")
-        self.send("TR<01>\r")
-        reply = self.read()
-        self.log.debug(f"Transceiver firmware: {reply}")
+        # TODO: Consider writing a _get_cmd_str instead of formatting here.
+        msg = f"{TRANSCEIVER_PREFIX}<{Cmd.FIRMWARE_VERSION}>\r"
+        self.send(msg)
+        self.log.debug(f"Transceiver firmware: {self.read()}")
 
     def send(self, msg: str, address: str = None):
         """Send a message to a specific device.
@@ -90,7 +93,7 @@ class SerialInterface(HardwareInterface):
         :param msg: the string to be sent
         :param address: Address of the stage to communicate with. Optional.
             If specified, the interface will issue additional commands to
-            select this device first. If unspecified, the command will be sent
+            select the device first. If unspecified, the command will be sent
             as-is. (This is useful to talk to the interface directly.)
         """
 
