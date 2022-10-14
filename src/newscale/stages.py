@@ -216,8 +216,8 @@ def axis_check(*args_to_skip: str):
                 # Skip pre-specified args.
                 if arg in args_to_skip:
                     continue
-                assert arg.lower() not in self.stages, \
-                    f"Error. Axis '{arg.upper()}' does not exist"
+                assert arg.lower() in self.stages, \
+                    f"Error. Axis '{arg.lower()}' does not exist"
             return func(self, *args, **kwargs)
         return inner
     return wrap
@@ -227,7 +227,7 @@ class MultiStage:
     """A conglomerate of many stages from many interfaces."""
 
     def __init__(self, **stages: M3LinearSmartStage):
-        self.log = logging.getLogger(f"{__name__}.{self.__classs__.__name__}")
+        self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         # Sanitize input to lowercase.
         self.stages = {k.lower(): v for k, v in stages.items()}
 
@@ -238,9 +238,10 @@ class MultiStage:
         Note: the multistage will NOT travel in a straight line to its
             destination unless accelerations and speeds are set to do so.
         """
-        # Kick off movements.
+        # TODO: implement waiting.
         # TODO: consider a timeout
-        pass
+        for axis_name, abs_position_mm in axes.items():
+            self.stages[axis_name].move_to_target(abs_position_mm)
 
     @axis_check('wait')
     def move_relative(self, wait: bool = True, **axes):

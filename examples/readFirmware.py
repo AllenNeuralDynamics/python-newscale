@@ -12,12 +12,11 @@ logger.setLevel(logging.DEBUG)
 
 # Connect to a single stage.
 stage = M3LinearSmartStage(SerialInterface(port='/dev/ttyUSB0'), "01")
-print("getting firmware.")
-print(stage.get_firmware_version())
+print(f"Firmware is {stage.get_firmware_version()}.")
 #pprint.pprint(stage.get_motor_status())
 pprint.pprint(stage.get_closed_loop_state_and_position())
-print("running stage.")
-stage.run(Direction.FORWARD, 0.3)
-sleep(0.5)
-stage.run(Direction.BACKWARD, 0.3)
+#print("running stage.")
+#stage.run(Direction.FORWARD, 0.25)
+#sleep(0.5)
+#stage.run(Direction.BACKWARD, 0.25)
 

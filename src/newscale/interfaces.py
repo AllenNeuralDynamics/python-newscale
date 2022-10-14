@@ -15,6 +15,12 @@ class HardwareInterface:
         log_extension = f".{name}" if name is not None else ""
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}"
                                      f"{log_extension}")
+        # Handshake with the interface.
+        # TODO: Consider writing a _get_cmd_str instead of formatting here.
+        msg = f"{TRANSCEIVER_PREFIX}<{Cmd.FIRMWARE_VERSION}>\r"
+        self.log.debug("Handshanking with hardware interface.")
+        self.send(msg)
+        self.log.debug(f"Transceiver firmware: {self.read()}")
 
     def _select_stage(self, address: str):
         """Select the stage from the hub or skip if it is already connected."""
@@ -26,24 +32,21 @@ class HardwareInterface:
         msg = f"{TRANSCEIVER_PREFIX}<{Cmd.STAGE_SELECT} {address}>\r"
         self.send(msg)
         cmd, stage_address, device_present = parse_tr_reply(self.read())
-        # TODO: _parse_msg here.
-        #device_present = True if reply.strip("<>\r").split()[-1] == "1" \
-        #    else False
         if not (device_present == 1):
             raise RuntimeError(f"Device at address {address} is not "
                                "present on this interface.")
 
-    def send(self, data: str, address: str = None):
+    def send(self, msg: str, address: str = None):
         """Common function signature to send data to a stage from an interface,
         or to an interface directly.
         """
-        raise NotImplementedError
+        raise NotImplementedError("To be implemented by the child class.")
 
     def read(self, address: str = None):
         """Common function signature to read a full reply from an interface,
         or from an interface directly.
         """
-        raise NotImplementedError
+        raise NotImplementedError("To be implemented by the child class.")
 
 
 class SerialInterface(HardwareInterface):
@@ -73,19 +76,13 @@ class SerialInterface(HardwareInterface):
         """
         name = port if port is not None \
             else serial.port if serial is not None else None
-        super().__init__(name)
         # Use existing Serial object or create a new one.
         self.ser = Serial(port, baudrate=baud_rate, timeout=0.5) \
             if port and not serial else serial
-
         # Manage many devices sharing this resource.
         self.last_address = None
-        # Establish connection with the hub.
-        self.log.debug("Connecting to serial interface.")
-        # TODO: Consider writing a _get_cmd_str instead of formatting here.
-        msg = f"{TRANSCEIVER_PREFIX}<{Cmd.FIRMWARE_VERSION}>\r"
-        self.send(msg)
-        self.log.debug(f"Transceiver firmware: {self.read()}")
+        # Handshake with the Interface hardware.
+        super().__init__(name)
 
     def send(self, msg: str, address: str = None):
         """Send a message to a specific device.
@@ -96,12 +93,9 @@ class SerialInterface(HardwareInterface):
             select the device first. If unspecified, the command will be sent
             as-is. (This is useful to talk to the interface directly.)
         """
-
         if address is not None:
             if self.last_address != address:
                 self._select_stage(address)
-            else:
-                self.log.debug("Address already selected at hub level.")
         # Detect Transceiver-only command and re-encode it. Otherwise, pass
         # the message through.
         # Note: this implementation does NOT handle "command prefixes" if any
@@ -123,8 +117,6 @@ class SerialInterface(HardwareInterface):
         if address is not None:
             if self.last_address != address:
                 self._select_stage(address)
-            else:
-                self.log.debug("Address already selected at hub level.")
         data = self.ser.read_until(b'\r').decode('utf8')
         address_msg = f"On address: '{address}', r" if address else "R"
         self.log.debug(f"{address_msg}ead back {repr(data)}")
@@ -142,21 +134,33 @@ class PoEInterface(HardwareInterface):
     def __init__(self, address: str = None, sock: socket = None):
         name = address if address is not None \
             else sock.getpeername()[0] if sock is not None else None
-        super().__init__(name)
         # Use existing socket object or create a new one.
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) \
             if address and not sock else sock
         self.sock.connect(address)
+        # Handshake with the interface hardware.
+        super().__init__(name)
 
-    def send(self, data: str, address: str = None):
+    def send(self, msg: str, address: str = None):
+        if address is not None:
+            if self.last_address != address:
+                self._select_stage(address)
+        # Note: this implementation does NOT handle "command prefixes" if any
+        # exist. (See Newscale_PathwaySoftwareManual.pdf pg73 for more info.)
+        # Create a situation-specific debug message.
         address_msg = f"On address: '{address}', s" if address else "S"
-        self.log.debug(f"{address_msg}ending: {repr(data)}")
-        self.sock.sendall(data.encode('ascii'))
+        debug_msg = f"{address_msg}ending: {repr(msg)}"
+        self.log.debug(debug_msg)
+        self.sock.sendall(msg.encode('ascii'))
         
     def read(self, address: str = None):
+        if address is not None:
+            if self.last_address != address:
+                self._select_stage(address)
+        data = self.sock.recv(self._class__.BUFFER_SIZE).decode('utf-8')
         address_msg = f"On address: '{address}', r" if address else "R"
         self.log.debug(f"{address_msg}ead back {repr(data)}")
-        return self.sock.recv(self._class__.BUFFER_SIZE).decode('utf-8')
+        return data
 
 
 class MockInterface(HardwareInterface):
