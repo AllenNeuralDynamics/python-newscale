@@ -6,7 +6,7 @@ from serial import Serial
 from socket import socket
 
 
-class HardwareInterface(ABC):
+class HardwareInterface:
 
     def __init__(self, name: str = None):
         # Create an instance-level logger if specified.
@@ -14,17 +14,34 @@ class HardwareInterface(ABC):
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}"
                                      f"{log_extension}")
 
+    def _select_stage(self, address: str):
+        """Select the stage from the hub or skip if it is already connected."""
+        # Select the current stage we're talking to before issuing commands.
+        #   i.e: if we've not communicated with this address last, select it.
+        self.log.debug(f"Selecting stage at address: {address}")
+        self.last_address = address
+        # TODO: _get_cmd_str here.
+        msg = f"TR<A0 {address}>\r"
+        self.send(msg)
+        reply = self.read()
+        # TODO: _parse_msg here.
+        device_present = True if reply.strip("<>\r").split()[-1] == "1" \
+            else False
+        if not device_present:
+            raise RuntimeError(f"Device at address {address} is not "
+                               "present on this interface.")
+
     def send(self, data: str, address: str = None):
-        """Common function signature for sending data from any interface.
-        Address may be optional if the interface is not a hub.
+        """Common function signature to send data to a stage from an interface,
+        or to an interface directly.
         """
-        pass
+        raise NotImplementedError
 
     def read(self, address: str = None):
-        """Common function signature to read a full reply from any interface.
-        Address may be optional if the interface is not a hub.
+        """Common function signature to read a full reply from an interface,
+        or from an interface directly.
         """
-        pass
+        raise NotImplementedError
 
 
 class SerialInterface(HardwareInterface):
@@ -67,22 +84,16 @@ class SerialInterface(HardwareInterface):
         reply = self.read()
         self.log.debug(f"Transceiver firmware: {reply}")
 
-    def _select_stage(self, address: str):
-        """Select the stage from the hub or skip if it is already connected."""
-        # Select the current stage we're talking to before issuing commands.
-        #   i.e: if we've not communicated with this address last, select it.
-        self.log.debug(f"Selecting stage at address: {address}")
-        self.last_address = address
-        msg = f"TR<A0 {address}>\r"
-        self.send(msg)
-        reply = self.read()
-        device_present = True if reply.strip("<>\r").split()[-1] == "1" \
-            else False
-        if not device_present:
-            raise RuntimeError(f"Device at address {address} is not "
-                               "present on this interface.")
-
     def send(self, msg: str, address: str = None):
+        """Send a message to a specific device.
+
+        :param msg: the string to be sent
+        :param address: Address of the stage to communicate with. Optional.
+            If specified, the interface will issue additional commands to
+            select this device first. If unspecified, the command will be sent
+            as-is. (This is useful to talk to the interface directly.)
+        """
+
         if address is not None:
             if self.last_address != address:
                 self._select_stage(address)

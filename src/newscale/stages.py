@@ -2,8 +2,8 @@
 
 import logging
 from bitstring import BitArray  # for unpacking
-from newscale.device_codes import Cmd, StateBit, Direction, \
-    ReplyParameterEncoding
+from newscale.device_codes import StateBit, Direction, parse_stage_reply
+from newscale.device_codes import StageCmd as Cmd
 from newscale.interfaces import HardwareInterface, SerialInterface, \
     PoEInterface
 from serial import Serial
@@ -37,25 +37,13 @@ class M3LinearSmartStage:
     @staticmethod
     def _parse_reply(reply: str):
         """Turn string reply into a Cmd plus one or more response integers."""
-        reply = reply.strip("<>\r")
-        # Receive a cmd key with possibly additional trailing words.
-        cmd_chunks = reply.split(" ", 1)  # split on the first space.
-        cmd = Cmd(cmd_chunks[0])
-        if len(cmd_chunks) == 1:
-            if cmd in [Cmd.ILLEGAL_COMMAND, Cmd.ILLEGAL_COMMAND_FORMAT]:
-                error_msg = f"Device replied with: {cmd.name}."
-                self.log.error(error_msg)
+        reply = parse_stage_reply(reply)
+        # Check for errors here.
+        if len(reply) == 1:
+            if reply[0] in [Cmd.ILLEGAL_COMMAND, Cmd.ILLEGAL_COMMAND_FORMAT]:
+                error_msg = f"Device replied with: {reply[0].name}."
                 raise RuntimeError(error_msg)
-            return cmd
-        # Case-Dependent behavior for replies with additional words.
-        if cmd == Cmd.FIRMWARE_VERSION:  # The trailing words form a message.
-            return cmd, cmd_chunks[1]
-        # General approach for unpacking replies will probably look like:
-        # >>> my_bit_array = BitArray(hex='FFFFFF 00000001 00000002')
-        # >>> my_bit_array.unpack('int:24, int:32, int:32')
-        # Everything else returns one or more ints of various sizes.
-        bit_array = BitArray(hex=cmd_chunks[1])
-        return (cmd, *bit_array.unpack(ReplyParameterEncoding[cmd]))
+        return reply
 
     def _send(self, cmd_str: str):
         """Send a command and return the parsed reply."""
@@ -139,9 +127,12 @@ class M3LinearSmartStage:
 
     # <10>
     def get_closed_loop_state_and_position(self):
+        """Return a tuple of (state as a dict, position in mm, error in mm)."""
         # use get_state
-        _, state_int = self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
-        return self._parse_state(state_int)
+        _, state_int, pos, error = \
+            self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
+        return self._parse_state(state_int), pos/TICKS_PER_MM, \
+               error/TICKS_PER_MM
 
     @staticmethod
     def _parse_state(state: int):

@@ -1,6 +1,7 @@
 """Collection of interface-agnostic device commands to get/set state."""
 
 import logging
+from bitstring import BitArray
 import sys
 from enum import Enum
 
@@ -14,7 +15,17 @@ except ImportError:
         pass
 
 
-class Cmd(StrEnum):
+# Constants
+TRANSCEIVER_PREFIX = "TR"
+
+
+# Commands, collected as Enums
+class StageCmd(StrEnum):
+    """Commands for the stage.
+    When issued, the actual command is wrapped inside of '<' '>'.
+
+    Example: '<01>', '<02>', etc.
+    """
     # Cmds echo back, so some commands can only be read back from the device.
     FIRMWARE_VERSION = "01"
     HALT = "03"
@@ -42,28 +53,84 @@ class Cmd(StrEnum):
     POSITION_CONTROL_LOG = "A9"
 
 
+class TransceiverCmd(StrEnum):
+    """Commands for Stage transceivers (M3-USB-3:1-EP, M3-PoE-3:1-6V, etc).
+    When issued, they must be prefixed with 'TR' and the actual command is
+    wrapped inside of '<' '>'.
+
+    Example: 'TR<01>', 'TR<A2>', etc.
+    """
+    FIRMWARE_VERSION = "01"
+    STAGE_SELECT = "A0"
+    MAC_ADDRESS = "A2"
+
+
+# Reply Encodings for pulling values out of the reply strings.
 # Note: We can't use struct.unpack since the replies come in non-ctype
 #   size signed and unsigned values (example: 24-bit signed integer).
-ReplyParameterEncoding = \
+StageReplyEncoding = \
 {
-    Cmd.MOVE_TO_TARGET: "int:32",
-    Cmd.OPEN_LOOP_SPEED: "uint:8",
-    Cmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32",
-    Cmd.MOTOR_STATUS: "uint:16",
-    Cmd.DRIVE_MODE: "uint:4, uint:16",  # TODO: check if we get 'R' as a reply back from the controller.
-    Cmd.CLOSED_LOOP_SPEED: "int:24, uint:24, int:24, uint:16",
-    Cmd.ERROR_THRESHOLDS_AND_STALL_DETECTION: "uint:1, int:24, int:24",
-    Cmd.PID_COEFFICIENTS: "int:16, int:16, int:16",
-    Cmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
-    Cmd.SOFT_LIMIT_STATES: "uint:4",
-    Cmd.TIME_INTERVAL_UNITS: "uint:12, uint:16",
-    Cmd.BAUD_RATE: "uint:4, uint:8",  # TODO: make a baud rate Enum
-    Cmd.EEPROM_WRITING_STATE: "uint:8, uint:4",
-    Cmd.RUN_FREQ_CALIBRATION: "uint:4, uint:8, uint:8",
-    #Cmd.POSITION_CONTROL_LOG: ""
+    StageCmd.FIRMWARE_VERSION: "int:4",
+    StageCmd.MOVE_TO_TARGET: "int:32",
+    StageCmd.OPEN_LOOP_SPEED: "uint:8",
+    StageCmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32",
+    StageCmd.MOTOR_STATUS: "uint:16",
+    StageCmd.DRIVE_MODE: "uint:4, uint:16",  # TODO: check if we get 'R' as a reply back from the controller.
+    StageCmd.CLOSED_LOOP_SPEED: "int:24, uint:24, int:24, uint:16",
+    StageCmd.ERROR_THRESHOLDS_AND_STALL_DETECTION: "uint:1, int:24, int:24",
+    StageCmd.PID_COEFFICIENTS: "int:16, int:16, int:16",
+    StageCmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
+    StageCmd.SOFT_LIMIT_STATES: "uint:4",
+    StageCmd.TIME_INTERVAL_UNITS: "uint:12, uint:16",
+    StageCmd.BAUD_RATE: "uint:4, uint:8",  # TODO: make a baud rate Enum
+    StageCmd.EEPROM_WRITING_STATE: "uint:8, uint:4",
+    StageCmd.RUN_FREQ_CALIBRATION: "uint:4, uint:8, uint:8",
+    #StageCmd.POSITION_CONTROL_LOG: ""
+}
+
+TransceiverReplyEncoding = \
+{
+    TransceiverCmd.FIRMWARE_VERSION: "int:4",
+    TransceiverCmd.STAGE_SELECT: "uint:8, uint:4"
 }
 
 
+def parse_reply(reply: str, conversion_key: dict):
+    """Turn string reply into a Cmd plus one or more response integers."""
+    Cmd = TransceiverCmd if conversion_key == TransceiverReplyEncoding \
+        else StageCmd
+    reply = reply.strip("<>\r")
+    # Receive a cmd key with possibly additional trailing words.
+    cmd_chunks = reply.split(" ", 1)  # split on the first space.
+    cmd = Cmd(cmd_chunks[0])
+    if len(cmd_chunks) == 1:
+        return cmd
+    # Everything else returns sequence of 0 or more ints of various sizes
+    # possibly followed by a string.
+    # Split reply into parseable (sequence of ints) and
+    # unparseable (string msg at the end).
+    int_count = len(conversion_key[cmd].split())  # How many parseable ints.
+    # split after int_count occurrences of " ".
+    tmp = cmd_chunks[1].split(" ", int_count)
+    parseable_params = " ".join(tmp[:int_count])
+    unparsed = tmp[int_count:]
+    # General approach for unpacking replies looks like:
+    # >>> bit_array = BitArray(hex='FFFFFF 00000001 00000002')
+    # >>> bit_array.unpack('int:24, int:32, int:32')  # returns a 3-tuple.
+    bit_array = BitArray(hex=parseable_params)
+    return (cmd, *bit_array.unpack(conversion_key[cmd]), *unparsed)
+
+
+# Convenience functions.
+def parse_stage_reply(reply: str):
+    return parse_reply(reply, StageReplyEncoding)
+
+
+def parse_tr_reply(reply: str):
+    return parse_reply(reply, TransceiverReplyEncoding)
+
+
+# Extra Structures for specifying stage commands and parsing stage replies.
 class StateBit(Enum):
     """Bitfield offsets for interpretting commands <10> and <19>"""
     RESERVED_0 = 0
