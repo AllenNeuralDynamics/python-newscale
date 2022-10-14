@@ -131,6 +131,7 @@ class PoEInterface(HardwareInterface):
     """
 
     BUFFER_SIZE = 1024
+    PORT = 23
 
     def __init__(self, address: str = None, sock: socket = None):
         name = address if address is not None \
@@ -138,7 +139,7 @@ class PoEInterface(HardwareInterface):
         # Use existing socket object or create a new one.
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) \
             if address and not sock else sock
-        self.sock.connect(address)
+        self.sock.connect((address, self.__class__.PORT))
         # Handshake with the interface hardware.
         super().__init__(name)
 
