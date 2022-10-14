@@ -20,7 +20,8 @@ class HardwareInterface:
         msg = f"{TRANSCEIVER_PREFIX}<{Cmd.FIRMWARE_VERSION}>\r"
         self.log.debug("Handshanking with hardware interface.")
         self.send(msg)
-        self.log.debug(f"Transceiver firmware: {self.read()}")
+        _, _, firmware = parse_tr_reply(self.read())
+        self.log.debug(f"Transceiver firmware: {firmware}")
 
     def _select_stage(self, address: str):
         """Select the stage from the hub or skip if it is already connected."""
