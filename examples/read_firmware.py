@@ -16,4 +16,3 @@ stage = M3LinearSmartStage(SerialInterface(port='/dev/ttyUSB0'), "01")
 print(f"Firmware is {stage.get_firmware_version()}.")
 pprint.pprint(stage.get_closed_loop_state_and_position())
 pprint.pprint(stage.get_motor_status())
-

@@ -8,8 +8,8 @@ from time import sleep, perf_counter
 import logging
 
 # Uncomment for some prolific log statements.
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
 
 MIN_TRAVEL = 0
 MAX_TRAVEL = 15
@@ -37,14 +37,17 @@ while perf_counter() - start_time < 4:
     sleep(0.25)
 sleep(1)
 
-# Time Moves:
-print()
-print("Time move and waiting.")
-stage.set_open_loop_mode()
-# This will throw an error if mode is not set to open loop first.
-stage.move_for_time(x=(Direction.FORWARD, 0.25),
-                    y=(Direction.FORWARD, 0.5),
-                    z=(Direction.FORWARD, 0.75))
-print(f"position is: {stage.get_position('x', 'y', 'z')}")
-print("Done.")
+# Time commands don't yet work.
+# The other 2 stages probably aren't working here because we didn't claim
+# each drive individually.
+## Time Moves:
+#print()
+#print("Time move and waiting.")
+#stage.set_open_loop_mode()
+## This will throw an error if mode is not set to open loop first.
+#stage.move_for_time(x=(Direction.FORWARD, 0.25),
+#                    y=(Direction.FORWARD, 0.5),
+#                    z=(Direction.FORWARD, 0.75))
+#print(f"position is: {stage.get_position('x', 'y', 'z')}")
+#print("Done.")
 
