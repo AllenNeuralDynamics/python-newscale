@@ -17,6 +17,7 @@ MAX_TRAVEL = 15
 port = '/dev/ttyUSB0'
 
 stage = USBXYZStage(port)
+stage.set_closed_loop_mode()
 # Move a random amount.
 print("Moving and waiting")
 # Function returns when the move is done (or timeout).
@@ -39,6 +40,8 @@ sleep(1)
 # Time Moves:
 print()
 print("Time move and waiting.")
+stage.set_open_loop_mode()
+# This will throw an error if mode is not set to open loop first.
 stage.move_for_time(x=(Direction.FORWARD, 0.25),
                     y=(Direction.FORWARD, 0.5),
                     z=(Direction.FORWARD, 0.75))

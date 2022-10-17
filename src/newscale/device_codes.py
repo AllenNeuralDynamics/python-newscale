@@ -168,6 +168,12 @@ class Direction(StrEnum):
     NEITHER = "N"
 
 
+class DriveMode(StrEnum):
+    OPEN_LOOP = "0"
+    CLOSED_LOOP = "1"
+    MODE_QUERY = "R"
+
+
 class Mode(Enum):
     AMPLITUDE = 0
     BURST = 1

@@ -2,7 +2,8 @@
 
 import logging
 from bitstring import BitArray  # for unpacking
-from newscale.device_codes import StateBit, Direction, Mode, parse_stage_reply
+from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
+    parse_stage_reply
 from newscale.device_codes import StageCmd as Cmd
 from newscale.interfaces import HardwareInterface, SerialInterface, \
     PoEInterface
@@ -41,7 +42,6 @@ class M3LinearSmartStage:
         """Turn string reply into a Cmd plus one or more response integers."""
         reply = parse_stage_reply(reply)
         # Check for errors here.
-        print(f"reply is {reply}")
         if len(reply) == 1:
             if reply[0] in [Cmd.ILLEGAL_COMMAND, Cmd.ILLEGAL_COMMAND_FORMAT]:
                 error_msg = f"Device replied with: {reply[0].name}."
@@ -191,13 +191,24 @@ class M3LinearSmartStage:
             if state[StateBit.DIRECTION] else Direction.BACKWARD
         return state
 
+    # <20>
+    def set_drive_mode(self, drive_mode: DriveMode):
+        """Set open or closed-loop mode."""
+        return self._send(self._get_cmd_str(Cmd.DRIVE_MODE, drive_mode.value))
+
+    # <20> variant
+    def get_drive_mode(self):
+        """Return the mode currently set."""
+        _, mode = self._send(self._get_cmd_str(Cmd.DRIVE_MODE,
+                                               DriveMode.MODE_QUERY.value))
+        return DriveMode(f"{mode:x}")
+
     # <40>
     def set_closed_loop_speed_and_accel(self, um_per_second: float,
                                         um_per_squared_second: float):
         """Set the closed loop speed in micrometers per second.
         Minimum
         """
-
         # Scheme for converting to register values comes from the datasheet.
         ENC_RES = 500  # nm
         INTERVAL = 1000  # us
@@ -263,6 +274,20 @@ class MultiStage:
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         # Sanitize input to lowercase.
         self.stages = {k.lower(): v for k, v in stages.items()}
+
+    @axis_check()
+    def set_drive_mode(self, **axes: DriveMode):
+        """Set the specified axes to the specified modes."""
+        for axis_name, drive_mode in axes.items():
+            self.stages[axis_name].set_drive_mode(drive_mode)
+
+    def set_open_loop_mode(self):
+        axes_dict = {x: DriveMode.OPEN_LOOP for x in self.stages.keys()}
+        self.set_drive_mode(**axes_dict)
+
+    def set_closed_loop_mode(self):
+        axes_dict = {x: DriveMode.CLOSED_LOOP for x in self.stages.keys()}
+        self.set_drive_mode(**axes_dict)
 
     @axis_check('wait')
     def move_absolute(self, wait: bool = True, **axes: float):
