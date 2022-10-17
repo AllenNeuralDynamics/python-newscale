@@ -7,6 +7,8 @@ from newscale.device_codes import StageCmd as Cmd
 from newscale.interfaces import HardwareInterface, SerialInterface, \
     PoEInterface
 from serial import Serial
+from time import perf_counter
+from typing import Tuple
 
 # Constants
 TICKS_PER_UM = 2.0  # encoder ticks per micrometer.
@@ -15,6 +17,7 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 
 class M3LinearSmartStage:
     """A single axis stage on an interface."""
+    MOVE_TIMEOUT_S = 15.0
 
     def __init__(self, interface: HardwareInterface, address: str = None):
         """Create hardware interface if unspecified or use an existing one.
@@ -47,7 +50,12 @@ class M3LinearSmartStage:
 
     def _send(self, cmd_str: str):
         """Send a command and return the parsed reply."""
-        # Note that interface will handle case where address is None.
+        # Note: interface will handle the case where address is None.
+
+        # Note: we must block until we get a reply from the device before
+        # returning to ensure that the axis state has changed. Otherwise,
+        # the device and pc are put into a race condition.
+
         self.interface.send(cmd_str, address=self.address)
         return self._parse_reply(self.interface.read(self.address))
 
@@ -81,8 +89,10 @@ class M3LinearSmartStage:
     def time_step(self, direction: Direction, step_count: int = None,
                   step_interval_us: float = None,
                   step_duration_us: float = None):
+        """"""
         # We cannot accept NEITHER as a direction
-        pass
+        # FIXME: implement this.
+        raise NotImplementedError
 
     # TODO: a class should warn if step size was never specified.
     # <06>
@@ -137,12 +147,13 @@ class M3LinearSmartStage:
     @staticmethod
     def _parse_state(state: int):
         """Convert state integer (<10> reply) to dict keyed by state bit."""
-        # Convert int to array of bits
-        state_bits = [True if digit == '1' else False
-                      for digit in bin(state)[2:]]
+        # Convert int to array of bits sorted by lsbit to msbit.
+        # zero-stuff input int to be 24 bits wide.
+        state_bits = reversed([True if digit == '1' else False
+                               for digit in f"{state:024b}"])
         # Iterate through StateBit Enum and reply to create a dict
-        return {k: v for k, v in zip(StateBit, state_bits)
-                if not k.name.startswith('RESERVED')}
+        return {k: v for k, v in zip(StateBit, state_bits)}
+#                if not k.name.startswith('RESERVED')}
 
     # <19>
     def get_motor_status(self):
@@ -153,11 +164,14 @@ class M3LinearSmartStage:
     def _parse_motor_flags(state: int):
         """Convert Motor Flags integer (<19> reply) to dict keyed by state bit
         """
-        state_bits = [True if digit == '1' else False
-                      for digit in bin(state)[2:]]
+        # Convert int to array of bits sorted by lsbit to msbit.
+        # zero-stuff input int to be 16 bits wide.
+        state_bits = reversed([True if digit == '1' else False
+                               for digit in f"{state:016b}"])
+        #
         state_bit_subset = list(StateBit)[:16]
-        return {k: v for k, v in zip(state_bit_subset, state_bits)
-                if not k.name.startswith('RESERVED')}
+        return {k: v for k, v in zip(state_bit_subset, state_bits)}
+#                if not k.name.startswith('RESERVED')}
 
     # <40>
     def set_closed_loop_speed_and_accel(self, um_per_second: float,
@@ -183,7 +197,7 @@ class M3LinearSmartStage:
                   * INTERVAL_COUNT * (INTERVAL/1e6))
         interval_duration_intervals = 1
 
-        return self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED,
+        return self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED,
                                             f"{vel_counts_per_interval:06x}",
                                             f"{cutoff_vel_counts_per_interval:06x}",
                                             f"{accel_counts_per_sq_interval:06x}",
@@ -193,7 +207,7 @@ class M3LinearSmartStage:
     def get_closed_loop_speed_settings(self):
         # TODO: actually turn these numbers back into something sensible.
         # Note that some bits in these numbers represent fractions.
-        return self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED))
+        return self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED))
 
     # <46>
     def set_soft_limit_values(self, min_value, max_value):
@@ -238,26 +252,47 @@ class MultiStage:
         Note: the multistage will NOT travel in a straight line to its
             destination unless accelerations and speeds are set to do so.
         """
-        # TODO: implement waiting.
-        # TODO: consider a timeout
         for axis_name, abs_position_mm in axes.items():
             self.stages[axis_name].move_to_target(abs_position_mm)
+        if not wait:
+            return
+        # Poll position vector until we have reached the target or timeout.
+        start_time = perf_counter()
+        while perf_counter() - start_time < self.__class__.MOVE_TIMEOUT_S:
+            stats = {self.stages[x].get_motor_status() for x in axes.keys()}
+            if any([stats[x].STALLED for x in axes.keys]):
+                raise RuntimeError("One or more axes is stalled.")
+            if all([(not stats[x].RUNNING) and stats[x].ON_TARGET
+                    for x in axes.keys]):
+                return
+        raise RuntimeError("Axes timed out trying to reach target position.")
 
     @axis_check('wait')
-    def move_relative(self, wait: bool = True, **axes):
-        pass
-
-    @axis_check('wait')
-    def move_for_time(self, wait: bool = True, **axes: float):
+    def move_for_time(self, wait: bool = True,
+                      **axes: Tuple[Direction, Tuple[float, None]]):
         """Move axes specified for the corresponding amount of time in seconds.
 
-        :param sequential: If true, move the axes one at time. Otherwise, kick
-            off each move as close to simultaneously as possible.
         :param wait: bool indicating if this function should block until the
             stage has reached its destination.
-        :param axes: the axis and its corresponding time to move.
+        :param axes: a per-axis tuple of (Direction, <move_time_in_seconds>).
+            the move time can be set to None, and the axis will run until
+            reaching a limit or being issued a halt.
         """
-        pass
+        for axis_name, (direction, seconds) in axes.items():
+            self.stages[axis_name].run(direction, seconds)
+        if not wait:
+            return
+        # Poll position vector until we have reached the target or timeout.
+        start_time = perf_counter()
+        while perf_counter() - start_time < self.__class__.MOVE_TIMEOUT_S:
+            stats = {self.stages[x].get_motor_status() for x in axes.keys()}
+            if any([stats[x].STALLED for x in axes.keys]):
+                raise RuntimeError("One or more axes is stalled.")
+            if all([(not stats[x].RUNNING) and (not stats[x].TIMED_RUN)
+                    for x in axes.keys]):
+                return
+        raise RuntimeError("One or more axes timed out trying to move for the"
+                           "specified time.")
 
     @axis_check
     def get_position(self, *axes):
@@ -270,16 +305,23 @@ class MultiStage:
         """
         if len(axes) == 0:  # return all axes if None are specified.
             axes = self.stages.keys()
-        return {k: self.stages[k].get_position() for k in axes}
+        return {x: self.stages[x].get_position() for x in axes}
 
     @axis_check
     def set_speed(self, **axes):
-        """Set the speed of the specified axes in ."""
+        """Set the speeds of the specified axes in mm/sec."""
+        # TODO: Units
+        pass
+
+    def get_speed(self, **axes):
+        """Get the speeds of the specified axes"""
+        # TODO: Units
         pass
 
     @axis_check
-    def halt(self, axis):
-        pass
+    def halt(self):
+        """Halt all axes"""
+        return {x: self.stages[x].halt() for x in self.stages.keys()}
 
 
 class USBXYZStage(MultiStage):

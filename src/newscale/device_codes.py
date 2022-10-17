@@ -134,7 +134,7 @@ def parse_tr_reply(reply: str):
 class StateBit(Enum):
     """Bitfield offsets for interpretting commands <10> and <19>"""
     RESERVED_0 = 0
-    MOTOR_DIRECTION = 1
+    DIRECTION = 1
     RUNNING = 2
     DRIVER_NOT_RESPONSIVE = 3
     BURST_MODE = 4
@@ -144,18 +144,18 @@ class StateBit(Enum):
     RESERVED_8 = 8
     FORWARD_LIMIT_REACHED = 9
     REVERSE_LIMIT_REACHED = 10
-    MOTOR_MODE = 11  # 0 = Amplitude Mode, 1 = Burst Mode
+    MODE = 11  # 0 = Amplitude Mode, 1 = Burst Mode
     RESERVED_12 = 12
     RESERVED_13 = 13
     RESERVED_14 = 14
     BACKGROUND_JOB_ACTIVE = 15
     ENCODER_ERROR = 16
     ZERO_REFERENCE_ENABLED = 17
-    MOTOR_ON_TARGET = 18
-    MOTOR_MOVING_TOWARD_TARGET = 19
+    ON_TARGET = 18
+    MOVING_TOWARD_TARGET = 19
     MAINTENANCE_MODE_ENABLED = 20
     CLOSED_LOOP_ENABLED = 21
-    MOTOR_ACCELERATING = 22
+    ACCELERATING = 22
     STALLED = 23
 
 
