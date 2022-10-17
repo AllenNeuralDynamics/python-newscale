@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from newscale.device_codes import TransceiverCmd as Cmd
 from newscale.device_codes import TRANSCEIVER_PREFIX, parse_tr_reply
 from serial import Serial
-from socket import socket
+from socket import socket, AF_INET, SOCK_STREAM
 
 
 class HardwareInterface:
@@ -133,15 +133,15 @@ class PoEInterface(HardwareInterface):
     BUFFER_SIZE = 1024
     PORT = 23
 
-    def __init__(self, address: str = None, sock: socket = None):
-        name = address if address is not None \
+    def __init__(self, address: str, sock: socket = None):
+        name = address if socket is not None \
             else sock.getpeername()[0] if sock is not None else None
         # Use existing socket object or create a new one.
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) \
+        self.sock = socket(AF_INET, SOCK_STREAM) \
             if address and not sock else sock
         self.sock.connect((address, self.__class__.PORT))
-        # Handshake with the interface hardware.
         super().__init__(name)
+        # Handshake with the interface hardware.
 
     def send(self, msg: str, address: str = None):
         if address is not None:

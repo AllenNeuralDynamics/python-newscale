@@ -7,7 +7,7 @@ from newscale.device_codes import StageCmd as Cmd
 from newscale.interfaces import HardwareInterface, SerialInterface, \
     PoEInterface
 from serial import Serial
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Tuple
 
 # Constants
@@ -17,7 +17,6 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 
 class M3LinearSmartStage:
     """A single axis stage on an interface."""
-    MOVE_TIMEOUT_S = 15.0
 
     def __init__(self, interface: HardwareInterface, address: str = None):
         """Create hardware interface if unspecified or use an existing one.
@@ -89,17 +88,17 @@ class M3LinearSmartStage:
     def time_step(self, direction: Direction, step_count: int = None,
                   step_interval_us: float = None,
                   step_duration_us: float = None):
-        """"""
-        # We cannot accept NEITHER as a direction
-        # FIXME: implement this.
+        """Setup a specified number of steps to move through at a specific
+        interval."""
+        # Note: we cannot accept NEITHER as a direction
         raise NotImplementedError
 
-    # TODO: a class should warn if step size was never specified.
     # <06>
     def distance_step(self, direction: Direction, step_size_mm: float = None):
         """Take a step of size `step_size` in the specified direction.
         If no step size is specified, the previous step size will be used.
         """
+        # TODO: warn if step size was never specified.
         step_size_ticks = round(step_size_mm*TICKS_PER_MM)  # 32 bit unsigned.
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
         return self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,
@@ -108,6 +107,7 @@ class M3LinearSmartStage:
 
     # <06> variant
     def set_distance_step_size(self, step_size_mm: float):
+        """Specify the size of the distance step taken in :meth:`distance_step`"""
         return self.distance_step(Direction.NEITHER, step_size_mm)
 
     # <07>
@@ -143,6 +143,11 @@ class M3LinearSmartStage:
             self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
         return self._parse_state(state_int), pos/TICKS_PER_MM, \
                error/TICKS_PER_MM
+
+    # <10> variant
+    def get_position(self):
+        """return the position of the current axis in mm."""
+        return self.get_closed_loop_state_and_position()[1]
 
     @staticmethod
     def _parse_state(state: int):
@@ -250,6 +255,7 @@ def axis_check(*args_to_skip: str):
 
 class MultiStage:
     """A conglomerate of many stages from many interfaces."""
+    MOVE_TIMEOUT_S = 15.0
 
     def __init__(self, **stages: M3LinearSmartStage):
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -270,12 +276,15 @@ class MultiStage:
         # Poll position vector until we have reached the target or timeout.
         start_time = perf_counter()
         while perf_counter() - start_time < self.__class__.MOVE_TIMEOUT_S:
-            stats = {self.stages[x].get_motor_status() for x in axes.keys()}
-            if any([stats[x].STALLED for x in axes.keys]):
+            stats = {x: self.stages[x].get_closed_loop_state_and_position()[0]
+                     for x in axes.keys()}
+            if any([stats[x][StateBit.STALLED] for x in axes.keys()]):
                 raise RuntimeError("One or more axes is stalled.")
-            if all([(not stats[x].RUNNING) and stats[x].ON_TARGET
-                    for x in axes.keys]):
+            if all([(not stats[x][StateBit.RUNNING])
+                    and stats[x][StateBit.ON_TARGET]
+                    for x in axes.keys()]):
                 return
+            sleep(0.01)
         raise RuntimeError("Axes timed out trying to reach target position.")
 
     @axis_check('wait')
@@ -296,18 +305,21 @@ class MultiStage:
         # Poll position vector until we have reached the target or timeout.
         start_time = perf_counter()
         while perf_counter() - start_time < self.__class__.MOVE_TIMEOUT_S:
-            stats = {self.stages[x].get_motor_status() for x in axes.keys()}
-            if any([stats[x].STALLED for x in axes.keys]):
+            stats = {x: self.stages[x].get_closed_loop_state_and_position()[0]
+                     for x in axes.keys()}
+            if any([stats[x][StateBit.STALLED] for x in axes.keys()]):
                 raise RuntimeError("One or more axes is stalled.")
-            if all([(not stats[x].RUNNING) and (not stats[x].TIMED_RUN)
-                    for x in axes.keys]):
+            if all([(not stats[x][StateBit.RUNNING])
+                    and (not stats[x][StateBit.TIMED_RUN])
+                    for x in axes.keys()]):
                 return
+            sleep(0.01)
         raise RuntimeError("One or more axes timed out trying to move for the"
                            "specified time.")
 
-    @axis_check
+    @axis_check()
     def get_position(self, *axes):
-        """Retrieve the specified axes positions as a dict, or get all
+        """Retrieve the specified axes positions (in mm) as a dict, or get all
         positions if none are specified.
 
         ..code_block::
@@ -318,7 +330,7 @@ class MultiStage:
             axes = self.stages.keys()
         return {x: self.stages[x].get_position() for x in axes}
 
-    @axis_check
+    @axis_check()
     def set_speed(self, **axes):
         """Set the speeds of the specified axes in mm/sec."""
         # TODO: Units
@@ -329,7 +341,7 @@ class MultiStage:
         # TODO: Units
         pass
 
-    @axis_check
+    @axis_check()
     def halt(self):
         """Halt all axes"""
         return {x: self.stages[x].halt() for x in self.stages.keys()}
