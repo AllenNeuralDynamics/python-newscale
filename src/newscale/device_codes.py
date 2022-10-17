@@ -165,4 +165,9 @@ class Direction(StrEnum):
     NEITHER = "N"
 
 
+class Mode(Enum):
+    AMPLITUDE = 0
+    BURST = 1
+
+
 

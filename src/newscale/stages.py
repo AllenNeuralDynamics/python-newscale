@@ -2,7 +2,7 @@
 
 import logging
 from bitstring import BitArray  # for unpacking
-from newscale.device_codes import StateBit, Direction, parse_stage_reply
+from newscale.device_codes import StateBit, Direction, Mode, parse_stage_reply
 from newscale.device_codes import StageCmd as Cmd
 from newscale.interfaces import HardwareInterface, SerialInterface, \
     PoEInterface
@@ -147,13 +147,19 @@ class M3LinearSmartStage:
     @staticmethod
     def _parse_state(state: int):
         """Convert state integer (<10> reply) to dict keyed by state bit."""
-        # Convert int to array of bits sorted by lsbit to msbit.
+        # Convert int to bool array representing bits sorted: lsbit to msbit.
         # zero-stuff input int to be 24 bits wide.
         state_bits = reversed([True if digit == '1' else False
                                for digit in f"{state:024b}"])
         # Iterate through StateBit Enum and reply to create a dict
-        return {k: v for k, v in zip(StateBit, state_bits)}
-#                if not k.name.startswith('RESERVED')}
+        state = {k: v for k, v in zip(StateBit, state_bits)}
+        #        if not k.name.startswith('RESERVED')}
+        # Cleanup state flags that have richer meaning.
+        state[StateBit.MODE] = Mode.BURST \
+            if state[StateBit.MODE] else Mode.AMPLITUDE
+        state[StateBit.DIRECTION] = Direction.FORWARD \
+            if state[StateBit.DIRECTION] else Direction.BACKWARD
+        return state
 
     # <19>
     def get_motor_status(self):
@@ -164,14 +170,19 @@ class M3LinearSmartStage:
     def _parse_motor_flags(state: int):
         """Convert Motor Flags integer (<19> reply) to dict keyed by state bit
         """
-        # Convert int to array of bits sorted by lsbit to msbit.
+        # Convert int to bool array representing bits sorted: lsbit to msbit.
         # zero-stuff input int to be 16 bits wide.
         state_bits = reversed([True if digit == '1' else False
                                for digit in f"{state:016b}"])
-        #
         state_bit_subset = list(StateBit)[:16]
-        return {k: v for k, v in zip(state_bit_subset, state_bits)}
-#                if not k.name.startswith('RESERVED')}
+        state = {k: v for k, v in zip(state_bit_subset, state_bits)}
+        #        if not k.name.startswith('RESERVED')}
+        # Cleanup state flags that have richer meaning.
+        state[StateBit.MODE] = Mode.BURST \
+            if state[StateBit.MODE] else Mode.AMPLITUDE
+        state[StateBit.DIRECTION] = Direction.FORWARD \
+            if state[StateBit.DIRECTION] else Direction.BACKWARD
+        return state
 
     # <40>
     def set_closed_loop_speed_and_accel(self, um_per_second: float,
