@@ -104,7 +104,10 @@ def parse_reply(reply: str, conversion_key: dict):
     cmd_chunks = reply.split(" ", 1)  # split on the first space.
     cmd = Cmd(cmd_chunks[0])
     if len(cmd_chunks) == 1:
-        return cmd
+        return (cmd,)
+    # Return ILLEGAL_COMMAND--even if it returns with arguments.
+    if Cmd == StageCmd and cmd == Cmd.ILLEGAL_COMMAND:
+        return (cmd,)
     # Everything else returns sequence of 0 or more ints of various sizes
     # possibly followed by a string.
     # Split reply into parseable (sequence of ints) and

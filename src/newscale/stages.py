@@ -41,6 +41,7 @@ class M3LinearSmartStage:
         """Turn string reply into a Cmd plus one or more response integers."""
         reply = parse_stage_reply(reply)
         # Check for errors here.
+        print(f"reply is {reply}")
         if len(reply) == 1:
             if reply[0] in [Cmd.ILLEGAL_COMMAND, Cmd.ILLEGAL_COMMAND_FORMAT]:
                 error_msg = f"Device replied with: {reply[0].name}."
@@ -79,7 +80,7 @@ class M3LinearSmartStage:
             "Direction must be forward or reverse."
         if seconds is None:
             return self._send(self._get_cmd_str(Cmd.RUN, direction.value))
-        duration = round(seconds*10) # value is encoded in tenths of seconds.
+        duration = round(seconds*10)  # value is encoded in tenths of seconds.
         assert duration < 256, "Time input value exceeds maximum value."
         return self._send(self._get_cmd_str(Cmd.RUN, direction.value,
                                             f"{duration:04x}"))
@@ -107,7 +108,7 @@ class M3LinearSmartStage:
 
     # <06> variant
     def set_distance_step_size(self, step_size_mm: float):
-        """Specify the size of the distance step taken in :meth:`distance_step`"""
+        """Specify the step size taken (in mm) in :meth:`distance_step`"""
         return self.distance_step(Direction.NEITHER, step_size_mm)
 
     # <07>
@@ -147,7 +148,8 @@ class M3LinearSmartStage:
     # <10> variant
     def get_position(self):
         """return the position of the current axis in mm."""
-        return self.get_closed_loop_state_and_position()[1]
+        _, _, pos, _ = self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
+        return pos/TICKS_PER_MM
 
     @staticmethod
     def _parse_state(state: int):
