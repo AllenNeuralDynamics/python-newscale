@@ -2,6 +2,7 @@
 
 import logging
 from bitstring import BitArray  # for unpacking
+from functools import wraps
 from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
     parse_stage_reply
 from newscale.device_codes import StageCmd as Cmd
@@ -26,7 +27,16 @@ class M3LinearSmartStage:
         :param interface: interface object through which to communicate.
         :param address: address to communicate to the device on the specified
             interface. Optional. If unspecified, commands will be passed
-            through directly.
+            through directly without trying to select an axis first.
+            
+        .. code-block:: python
+
+            from newscale.interfaces import SerialInterface
+            from newscale.stages import M3LinearSmartStage
+
+            interface = SerialInterface(port='COM4'),
+            stage = M3LinearSmartStage(interface, "01")
+        
         """
         # Either address can be passed in XOR interface
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -107,18 +117,21 @@ class M3LinearSmartStage:
                                             f"{duration:04x}"))
 
     # <05>
-    def time_step(self, direction: Direction, step_count: int = None,
-                  step_interval_us: float = None,
-                  step_duration_us: float = None):
-        """Setup a specified number of steps to move through at a specific
-        interval."""
-        # Note: we cannot accept NEITHER as a direction
-        raise NotImplementedError
+    #def time_step(self, direction: Direction, step_count: int = None,
+    #              step_interval_us: float = None,
+    #              step_duration_us: float = None):
+    #    """Setup a specified number of steps to move through at a specific
+    #    interval."""
+    #    # Note: we cannot accept NEITHER as a direction
+    #    raise NotImplementedError
 
     # <06>
     def distance_step(self, direction: Direction, step_size_mm: float = None):
         """Take a step of size `step_size` in the specified direction.
         If no step size is specified, the previous step size will be used.
+
+        :param direction: direction to step in.
+        :param step_size_mm: the size of the step. Optional.
         """
         # TODO: warn if step size was never specified.
         step_size_ticks = round(step_size_mm*TICKS_PER_MM)  # 32 bit unsigned.
@@ -138,6 +151,7 @@ class M3LinearSmartStage:
     # <08>
     def move_to_target(self, setpoint_mm: float = None):
         """Move to the target absolute setpoint specified in mm.
+
         :param setpoint_mm:  positive or negative setpoint.
         """
         # TODO: convert target setpoint to encoder ticks.
@@ -149,10 +163,13 @@ class M3LinearSmartStage:
                                             f"{step_size_ticks:08x}"))
 
     # <09>
-    def set_open_loop_speed(self, percentage: float):
+    def set_open_loop_speed(self, percent: float):
         """Set the open loop speed as a percent (0 to 100) of the full scale
-        range."""
-        speed_byte = round(percentage/100 * 255)
+        range.
+
+        :param percent: Speed indicated as a percentage (0.0-100.0)
+        """
+        speed_byte = round(percent/100 * 255)
         assert 1 < speed_byte < 256, "speed setting out of range."
         return self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED,
                                             f"{speed_byte:02x}"))
@@ -168,7 +185,7 @@ class M3LinearSmartStage:
 
     # <10> variant
     def get_position(self):
-        """return the position of the current axis in mm."""
+        """return the position of this axis in [mm]."""
         _, _, pos, _ = self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
         return pos/TICKS_PER_MM
 
@@ -191,6 +208,9 @@ class M3LinearSmartStage:
 
     # <19>
     def get_motor_status(self):
+        """Return a dictionary, keyed by
+        :obj:`~newscale.device_codes.StateBit` indicating the motor's
+        status."""
         _, state_int = self._send(self._get_cmd_str(Cmd.MOTOR_STATUS))
         return self._parse_motor_flags(state_int)
 
@@ -269,6 +289,8 @@ class M3LinearSmartStage:
 def axis_check(*args_to_skip: str):
     """Ensure that the axis (specified as an arg or kwarg) exists."""
     def wrap(func):
+        # wraps needed for sphinx to make docs for methods with this decorator.
+        @wraps(func)
         def inner(self, *args, **kwargs):
             # Sanitize input to all-lowercase.
             args = [a.lower() for a in args]
@@ -292,13 +314,38 @@ class MultiStage:
     MOVE_TIMEOUT_S = 15.0
 
     def __init__(self, **stages: M3LinearSmartStage):
+        """Init a MultiStage object from one or more stages.
+
+        :param stages: one or more stage objects keyed by name.
+
+        .. code-block:: python
+        
+            from newscale.interfaces import SerialInterface
+            from newscale.stages import M3LinearSmartStage, MultiStage
+
+            interface = SerialInterface(port='COM4'),
+            x_stage = M3LinearSmartStage(interface, "01")
+            y_stage = M3LinearSmartStage(interface, "02")
+
+            stages = MultiStage(x=x_stage, y=y_stage)
+
+        """
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         # Sanitize input to lowercase.
         self.stages = {k.lower(): v for k, v in stages.items()}
 
     @axis_check()
     def set_drive_mode(self, **axes: DriveMode):
-        """Set the specified axes to the specified modes."""
+        """Set the specified axes to the specified modes.
+
+        :param axes: one or more axes specified by name with their drive mode
+            specified as a DriveMode.
+
+        .. code-block:: python
+
+            stages.set_drive_mode(x=DriveMode.CLOSED_LOOP)
+
+        """
         for axis_name, drive_mode in axes.items():
             self.stages[axis_name].set_drive_mode(drive_mode)
 
@@ -322,6 +369,11 @@ class MultiStage:
 
         Note: the multistage will NOT travel in a straight line to its
             destination unless accelerations and speeds are set to do so.
+
+        :param wait: bool indicating if this function should block until the
+            stage has reached its destination.
+        :param axes: one or more axes specified by name with their move amount
+            specified in [mm].
         """
         for axis_name, abs_position_mm in axes.items():
             self.stages[axis_name].move_to_target(abs_position_mm)
@@ -372,13 +424,17 @@ class MultiStage:
                            "specified time.")
 
     @axis_check()
-    def get_position(self, *axes):
+    def get_position(self, *axes: str):
         """Retrieve the specified axes positions (in mm) as a dict, or get all
         positions if none are specified.
 
-        ..code_block::
-            get_position('x', 'y', 'z')  # Get specified positions OR
-            get_position()  # Get all positions.
+        :param axes: an unlimited number of axes specified by name (string).
+
+        .. code-block:: python
+
+            stages.get_position('x', 'y', 'z')  # Get specified positions OR
+            stages.get_position()  # Get all positions.
+
         """
         if len(axes) == 0:  # return all axes if None are specified.
             axes = self.stages.keys()

@@ -67,13 +67,15 @@ class SerialInterface(HardwareInterface):
         :param serial: existing serial object. If unspecified, a Serial object
             will be creatd from the port.
 
-        ..code_block::
+        .. code-block:: python
+
             interface = SerialInterface('COM4')  # OR
             interface = SerialInterface('COM4', 115200)  # OR
 
             from serial import Serial
             ser = Serial('COM4', baudrate=250000)
             interface = SerialInterface(serial=ser)
+
         """
         name = port if port is not None \
             else serial.port if serial is not None else None
