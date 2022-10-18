@@ -27,7 +27,8 @@ class StageCmd(StrEnum):
     Example: '<01>', '<02>', etc.
     """
     # Cmds echo back, so some commands can only be read back from the device.
-    FIRMWARE_VERSION = "01"
+    FIRMWARE_VERSION = "01"  # Dual purpose. Also establishes host control.
+    RELEASE_HOST_CONTROL = "02"
     HALT = "03"
     RUN = "04"
     STEP_OPEN_LOOP = "05"  # Step at a fixed speed for a pre-specified time

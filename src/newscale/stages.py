@@ -7,6 +7,7 @@ from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
 from newscale.device_codes import StageCmd as Cmd
 from newscale.interfaces import HardwareInterface, SerialInterface, \
     PoEInterface
+from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 from serial import Serial
 from time import perf_counter, sleep
 from typing import Tuple
@@ -31,21 +32,29 @@ class M3LinearSmartStage:
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.address = address
         self.interface = interface
+        self.log.debug("Establishing host control by requesting firmware"
+                       "version.")
+        self.get_firmware_version()  # Necessary to handshake with the PC.
+        self.set_drive_mode(DriveMode.CLOSED_LOOP)  # Prep stage for abs moves.
 
     @staticmethod
     def _get_cmd_str(cmd: Cmd, *args: str):
         args_str = " " + " ".join([a.upper() for a in args]) if args else ""
         return f"<{cmd.value.upper()}{args_str}>\r"
 
-    @staticmethod
-    def _parse_reply(reply: str):
+    def _parse_reply(self, reply: str):
         """Turn string reply into a Cmd plus one or more response integers."""
         reply = parse_stage_reply(reply)
         # Check for errors here.
         if len(reply) == 1:
-            if reply[0] in [Cmd.ILLEGAL_COMMAND, Cmd.ILLEGAL_COMMAND_FORMAT]:
-                error_msg = f"Device replied with: {reply[0].name}."
-                raise RuntimeError(error_msg)
+            if reply[0] == Cmd.ILLEGAL_COMMAND:
+                error_msg = "Prior command cannot be issued in this state."
+                self.log.error(error_msg)
+                raise IllegalCommandError(error_msg)
+            elif reply[0] == Cmd.ILLEGAL_COMMAND_FORMAT:
+                error_msg = "Prior command is formatted incorrectly."
+                self.log.error(error_msg)
+                raise IllegalCommandFormatError(error_msg)
         return reply
 
     def _send(self, cmd_str: str):
@@ -61,8 +70,20 @@ class M3LinearSmartStage:
 
     # <01>
     def get_firmware_version(self):
-        """Get the firmware version."""
+        """Get the firmware version.
+
+        Note: this command is issued on startup to establish computer control.
+        To release computer control, issue a <02> command.
+
+        Note: some commands will reply with <24> (ILLEGAL_COMMAND) if host
+        control is not yet established.
+        """
         return self._send(self._get_cmd_str(Cmd.FIRMWARE_VERSION))[-1]
+
+    # <02>
+    def close(self):
+        """Release host control."""
+        return self._send(self._get_cmd_str(Cmd.RELEASE_HOST_CONTROL))
 
     # <03>
     def halt(self):
@@ -282,10 +303,16 @@ class MultiStage:
             self.stages[axis_name].set_drive_mode(drive_mode)
 
     def set_open_loop_mode(self):
+        """Put all axes in open loop mode."""
         axes_dict = {x: DriveMode.OPEN_LOOP for x in self.stages.keys()}
         self.set_drive_mode(**axes_dict)
 
     def set_closed_loop_mode(self):
+        """Put all axes in closed loop mode.
+
+        Note: issuing absolute moves requires that the stage first be in
+        closed loop mode.
+        """
         axes_dict = {x: DriveMode.CLOSED_LOOP for x in self.stages.keys()}
         self.set_drive_mode(**axes_dict)
 
@@ -372,6 +399,10 @@ class MultiStage:
     def halt(self):
         """Halt all axes"""
         return {x: self.stages[x].halt() for x in self.stages.keys()}
+
+    def close(self):
+        """Release computer control of all axes."""
+        return {x: self.stages[x].close() for x in self.stages.keys()}
 
 
 class USBXYZStage(MultiStage):
