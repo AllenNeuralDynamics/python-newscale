@@ -13,6 +13,10 @@ Welcome to Python-Newscale's documentation!
     :members:
     :member-order: bysource
 
+.. autoclass:: newscale.stages.USBXYZStage
+    :members:
+    :member-order: bysource
+
 .. autoclass:: newscale.interfaces.SerialInterface
     :members:
     :member-order: bysource
