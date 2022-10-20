@@ -15,6 +15,8 @@ class HardwareInterface:
         log_extension = f".{name}" if name is not None else ""
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}"
                                      f"{log_extension}")
+        # Manage many devices sharing this resource.
+        self.last_address = None
         # Handshake with the interface.
         # TODO: Consider writing a _get_cmd_str instead of formatting here.
         msg = f"{TRANSCEIVER_PREFIX}<{Cmd.FIRMWARE_VERSION}>\r"
@@ -82,8 +84,6 @@ class SerialInterface(HardwareInterface):
         # Use existing Serial object or create a new one.
         self.ser = Serial(port, baudrate=baud_rate, timeout=0.5) \
             if port and not serial else serial
-        # Manage many devices sharing this resource.
-        self.last_address = None
         # Handshake with the Interface hardware.
         super().__init__(name)
 
@@ -161,7 +161,7 @@ class PoEInterface(HardwareInterface):
         if address is not None:
             if self.last_address != address:
                 self._select_stage(address)
-        data = self.sock.recv(self._class__.BUFFER_SIZE).decode('utf-8')
+        data = self.sock.recv(self.__class__.BUFFER_SIZE).decode('utf-8')
         address_msg = f"On address: '{address}', r" if address else "R"
         self.log.debug(f"{address_msg}ead back {repr(data)}")
         return data
