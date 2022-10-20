@@ -6,7 +6,7 @@ from functools import wraps
 from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
     parse_stage_reply
 from newscale.device_codes import StageCmd as Cmd
-from newscale.interfaces import HardwareInterface, SerialInterface, \
+from newscale.interfaces import HardwareInterface, USBInterface, \
     PoEInterface
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 from serial import Serial
@@ -31,10 +31,10 @@ class M3LinearSmartStage:
             
         .. code-block:: python
 
-            from newscale.interfaces import SerialInterface
+            from newscale.interfaces import USBInterface
             from newscale.stages import M3LinearSmartStage
 
-            interface = SerialInterface(port='COM4'),
+            interface = USBInterface(port='COM4'),
             stage = M3LinearSmartStage(interface, "01")
         
         """
@@ -320,10 +320,10 @@ class MultiStage:
 
         .. code-block:: python
         
-            from newscale.interfaces import SerialInterface
+            from newscale.interfaces import USBInterface
             from newscale.stages import M3LinearSmartStage, MultiStage
 
-            interface = SerialInterface(port='COM4'),
+            interface = USBInterface(port='COM4'),
             x_stage = M3LinearSmartStage(interface, "01")
             y_stage = M3LinearSmartStage(interface, "02")
 
@@ -465,13 +465,13 @@ class USBXYZStage(MultiStage):
     """An XYZ Stage from a single USB interface."""
 
     def __init__(self, port: str = None,
-                 serial_interface: SerialInterface = None):
-        if not ((port is None) ^ (serial_interface is None)):
-            raise SyntaxError("Exclusively either port or serial_interface"
+                 usb_interface: USBInterface = None):
+        if not ((port is None) ^ (usb_interface is None)):
+            raise SyntaxError("Exclusively either port or usb_interface"
                               "(i.e: one or the other, but not both) options "
                               "must be specified.")
-        self.interface = serial_interface if serial_interface and not port \
-            else SerialInterface(port)
+        self.interface = usb_interface if usb_interface and not port \
+            else USBInterface(port)
         # Create 3 stages with corresponding addresses.
         stages = {'x': M3LinearSmartStage(self.interface, '01'),
                   'y': M3LinearSmartStage(self.interface, '02'),

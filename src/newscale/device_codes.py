@@ -1,16 +1,11 @@
 """Collection of interface-agnostic device commands to get/set state."""
 
-import logging
 from bitstring import BitArray
-import sys
 from enum import Enum
 
 try:
     from enum import StrEnum  # a 3.11 freature.
 except ImportError:
-    logging.error("StrEnum not available with this version of python. "
-                  "Creating it.")
-
     class StrEnum(str, Enum):
         pass
 

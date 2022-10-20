@@ -20,7 +20,7 @@ class HardwareInterface:
         # Handshake with the interface.
         # TODO: Consider writing a _get_cmd_str instead of formatting here.
         msg = f"{TRANSCEIVER_PREFIX}<{Cmd.FIRMWARE_VERSION}>\r"
-        self.log.debug("Handshanking with hardware interface.")
+        self.log.debug("Handshaking with hardware interface.")
         self.send(msg)
         _, _, firmware = parse_tr_reply(self.read())
         self.log.debug(f"Transceiver firmware: {firmware}")
@@ -52,7 +52,7 @@ class HardwareInterface:
         raise NotImplementedError("To be implemented by the child class.")
 
 
-class SerialInterface(HardwareInterface):
+class USBInterface(HardwareInterface):
     """USB-to-Serial interface, which may be a direct link to one stage or a
     hub to many. If an address is specified when sending, then the device
     acts as a hub and selects that device first.
@@ -71,12 +71,12 @@ class SerialInterface(HardwareInterface):
 
         .. code-block:: python
 
-            interface = SerialInterface('COM4')  # OR
-            interface = SerialInterface('COM4', 115200)  # OR
+            interface = USBInterface('COM4')  # OR
+            interface = USBInterface('COM4', 115200)  # OR
 
             from serial import Serial
             ser = Serial('COM4', baudrate=250000)
-            interface = SerialInterface(serial=ser)
+            interface = USBInterface(serial=ser)
 
         """
         name = port if port is not None \

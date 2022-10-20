@@ -17,7 +17,7 @@ Welcome to Python-Newscale's documentation!
     :members:
     :member-order: bysource
 
-.. autoclass:: newscale.interfaces.SerialInterface
+.. autoclass:: newscale.interfaces.USBInterface
     :members:
     :member-order: bysource
 

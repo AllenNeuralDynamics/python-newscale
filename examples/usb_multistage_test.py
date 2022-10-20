@@ -2,7 +2,7 @@
 
 from newscale.stages import USBXYZStage
 from newscale.device_codes import Direction
-from newscale.interfaces import MockInterface, SerialInterface
+from newscale.interfaces import MockInterface, USBInterface
 from random import uniform
 from time import sleep, perf_counter
 import logging
