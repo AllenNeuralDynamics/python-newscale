@@ -66,7 +66,7 @@ class TransceiverCmd(StrEnum):
 #   size signed and unsigned values (example: 24-bit signed integer).
 StageReplyEncoding = \
 {
-    StageCmd.FIRMWARE_VERSION: "int:4",
+    StageCmd.FIRMWARE_VERSION: "int:4", # Remaining response is a string.
     StageCmd.MOVE_TO_TARGET: "int:32",
     StageCmd.OPEN_LOOP_SPEED: "uint:8",
     StageCmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32",
@@ -77,7 +77,7 @@ StageReplyEncoding = \
     StageCmd.PID_COEFFICIENTS: "int:16, int:16, int:16",
     StageCmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
     StageCmd.SOFT_LIMIT_STATES: "uint:4",
-    StageCmd.TIME_INTERVAL_UNITS: "uint:12, uint:16",
+    StageCmd.TIME_INTERVAL_UNITS: "",  # Response is a string.
     StageCmd.BAUD_RATE: "uint:4, uint:8",  # TODO: make a baud rate Enum
     StageCmd.EEPROM_WRITING_STATE: "uint:8, uint:4",
     StageCmd.RUN_FREQ_CALIBRATION: "uint:4, uint:8, uint:8",

@@ -7,8 +7,12 @@ from time import sleep
 import logging
 import pprint
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+# Uncomment for some prolific log statements.
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
+#logger.addHandler(logging.StreamHandler())
+#logger.handlers[-1].setFormatter(
+#    logging.Formatter(fmt='%(asctime)s:%(name)s:%(levelname)s: %(message)s'))
 
 # Connect to a single stage.
 #stage = M3LinearSmartStage(PoEInterface(address="10.128.49.22"), "01")

@@ -42,7 +42,7 @@ class M3LinearSmartStage:
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         self.address = address
         self.interface = interface
-        self.log.debug("Establishing host control by requesting firmware"
+        self.log.debug("Establishing host control by requesting firmware "
                        "version.")
         self.get_firmware_version()  # Necessary to handshake with the PC.
         self.set_drive_mode(DriveMode.CLOSED_LOOP)  # Prep stage for abs moves.
@@ -245,21 +245,27 @@ class M3LinearSmartStage:
         return DriveMode(f"{mode:x}")
 
     # <40>
-    def set_closed_loop_speed_and_accel(self, um_per_second: float,
-                                        um_per_squared_second: float):
-        """Set the closed loop speed in micrometers per second.
-        Minimum
+    def set_closed_loop_speed_and_accel(self, mm_per_second: float,
+                                        mm_per_squared_second: float):
+        """Set the closed loop speed and accel in mm/sec and mm/(sec^2)
+        respectively.
+
+        :param mm_per_second: speed in mm per second.
+        :param mm_per_squared_second: acceleration in mm per second squared.
         """
         # Scheme for converting to register values comes from the datasheet.
         ENC_RES = 500  # nm
         INTERVAL = 1000  # us
         INTERVAL_COUNT = 1
         cutoff_velocity = 20  # um/s
+
+        um_per_second = mm_per_second / 1.0e3
+        um_per_squared_second = mm_per_second / 1.0e3
         vel_counts_per_interval = \
             round((um_per_second/(ENC_RES/1e3)) * 256
                   * (INTERVAL_COUNT*(INTERVAL/1e6)))
         cutoff_vel_counts_per_interval = \
-            round(cutoff_velocity/(enc_res/1e3) * 256
+            round(cutoff_velocity/(ENC_RES/1e3) * 256
                   * (INTERVAL_COUNT * (INTERVAL/1e6)))
         accel_counts_per_sq_interval = \
             round(vel_counts_per_interval
@@ -267,22 +273,38 @@ class M3LinearSmartStage:
                   * INTERVAL_COUNT * (INTERVAL/1e6))
         interval_duration_intervals = 1
 
-        return self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED,
-                                            f"{vel_counts_per_interval:06x}",
-                                            f"{cutoff_vel_counts_per_interval:06x}",
-                                            f"{accel_counts_per_sq_interval:06x}",
-                                            f"{interval_duration_intervals:04x}"))
+        return self._send(
+            self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED,
+                              f"{vel_counts_per_interval:06x}",
+                              f"{cutoff_vel_counts_per_interval:06x}",
+                              f"{accel_counts_per_sq_interval:06x}",
+                              f"{interval_duration_intervals:04x}"))
 
     # <40> variant
     def get_closed_loop_speed_settings(self):
-        # TODO: actually turn these numbers back into something sensible.
+        # TODO: actually convert these numbers back into something sensible.
         # Note that some bits in these numbers represent fractions.
         return self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED))
 
     # <46>
     def set_soft_limit_values(self, min_value, max_value):
-        # FIXME
-        return self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES, min_value, max_value)
+        return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
+                                            min_value, max_value))
+
+    # <52>
+    def get_time_interval_units(self):
+        """Get the time interval units for this particular M3 stage.
+
+        Note: M3-LS, M3-L, and M3-FS have different time interval units, but
+        time interval units are the same within these "sub-families."
+
+        :return: a 2-tuple of (<float>, <str>) where the first value is a float
+            representing the interval, and the second value is a string
+            representing the units. (The second value should always be "usec".)
+        """
+        _, unit_str = self._send(self._get_cmd_str(Cmd.TIME_INTERVAL_UNITS))
+        val_str, unit_str = unit_str.split()
+        return float(val_str), unit_str
 
 
 # Decorators

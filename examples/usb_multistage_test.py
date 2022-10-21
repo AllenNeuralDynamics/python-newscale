@@ -8,8 +8,11 @@ from time import sleep, perf_counter
 import logging
 
 # Uncomment for some prolific log statements.
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+#logger = logging.getLogger()
+#logger.setLevel(logging.DEBUG)
+#logger.addHandler(logging.StreamHandler())
+#logger.handlers[-1].setFormatter(
+#    logging.Formatter(fmt='%(asctime)s:%(name)s:%(levelname)s: %(message)s'))
 
 MIN_TRAVEL = 0
 MAX_TRAVEL = 15
