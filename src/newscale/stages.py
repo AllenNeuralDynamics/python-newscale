@@ -20,6 +20,9 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 
 class M3LinearSmartStage:
     """A single axis stage on an interface."""
+    #Constants
+    ENC_RES = 500.  # nanometers. Fixed value for speed calculations.
+    INTERVAL = 1000.  # us. Fixed value for speed calculations.
 
     def __init__(self, interface: HardwareInterface, address: str = None):
         """Create hardware interface if unspecified or use an existing one.
@@ -245,34 +248,41 @@ class M3LinearSmartStage:
         return DriveMode(f"{mode:x}")
 
     # <40>
-    def set_closed_loop_speed_and_accel(self, mm_per_second: float,
-                                        mm_per_squared_second: float):
+    def set_closed_loop_speed_and_accel(self, vel_mm_per_second: float,
+                                        accel_mm_per_squared_second: float,
+                                        min_vel_mm_per_second: float = 0.02):
         """Set the closed loop speed and accel in mm/sec and mm/(sec^2)
         respectively.
 
         :param mm_per_second: speed in mm per second.
         :param mm_per_squared_second: acceleration in mm per second squared.
         """
+        um_per_second = vel_mm_per_second * 1.0e3
+        um_per_squared_second = accel_mm_per_squared_second * 1.0e3
+        cutoff_vel_um_per_sec = min_vel_mm_per_second * 1e3
         # Scheme for converting to register values comes from the datasheet.
-        ENC_RES = 500  # nm
-        INTERVAL = 1000  # us
         INTERVAL_COUNT = 1
-        cutoff_velocity = 20  # um/s
 
-        um_per_second = mm_per_second / 1.0e3
-        um_per_squared_second = mm_per_second / 1.0e3
         vel_counts_per_interval = \
-            round((um_per_second/(ENC_RES/1e3)) * 256
-                  * (INTERVAL_COUNT*(INTERVAL/1e6)))
+            round((um_per_second/(self.__class__.ENC_RES/1000.)) * 256
+                  * (INTERVAL_COUNT*(self.__class__.INTERVAL/1.0e6)))
         cutoff_vel_counts_per_interval = \
-            round(cutoff_velocity/(ENC_RES/1e3) * 256
-                  * (INTERVAL_COUNT * (INTERVAL/1e6)))
+            round(cutoff_vel_um_per_sec/(self.__class__.ENC_RES/1e3) * 256
+                  * (INTERVAL_COUNT * (self.__class__.INTERVAL/1e6)))
         accel_counts_per_sq_interval = \
             round(vel_counts_per_interval
                   / (um_per_second/um_per_squared_second)
-                  * INTERVAL_COUNT * (INTERVAL/1e6))
-        interval_duration_intervals = 1
+                  * INTERVAL_COUNT * (self.__class__.INTERVAL/1e6))
+        interval_duration_intervals = INTERVAL_COUNT
 
+        # Check the size of values as they would appear on the register.
+        assert len(bin(vel_counts_per_interval)[2:]) <= 24, \
+            f"Requested velocity is too large."
+        assert len(bin(cutoff_vel_counts_per_interval)[2:]) <= 24, \
+            "Requested cutoff velocity is too large."
+        assert len(bin(accel_counts_per_sq_interval)[2:]) <= 24,\
+            "Requested acceleration is too large."
+        # Note that interval duration is fixed for now.
         return self._send(
             self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED,
                               f"{vel_counts_per_interval:06x}",
@@ -282,9 +292,33 @@ class M3LinearSmartStage:
 
     # <40> variant
     def get_closed_loop_speed_settings(self):
-        # TODO: actually convert these numbers back into something sensible.
-        # Note that some bits in these numbers represent fractions.
-        return self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED))
+        """Get closed loop speed and acceleration settings.
+
+        :returns: a 4 tuple of (<velocity in mm/sec>,
+        <minimum velocity in mm/sec>, <acceleration in mm/sec^2>,
+        <interval count>)
+        """
+        # Note that conversion equations come from datasheet.
+        _, vel_counts_per_interval, min_vel_counts_per_interval, \
+        accel_counts_per_sq_interval, interval_count = \
+            self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED))
+        # Helper value.
+        counts_per_interval_to_mm_per_sec = \
+            (self.__class__.ENC_RES*1.0e6) \
+            / (1.0e3*256*interval_count*self.__class__.INTERVAL*1.0e3)
+        #  Convert raw register values to have familiar units where possible.
+        vel_mm_per_second = \
+            vel_counts_per_interval * counts_per_interval_to_mm_per_sec
+        min_vel_mm_per_second = \
+            min_vel_counts_per_interval * counts_per_interval_to_mm_per_sec
+        # accel value depends on raw velocity and accel regsiters AND
+        # velocity computed in um/sec.
+        accel_um_per_sq_second = \
+            (vel_mm_per_second*1000*accel_counts_per_sq_interval*1e6) \
+            / (vel_counts_per_interval*interval_count*self.__class__.INTERVAL)
+        accel_mm_per_sq_second = accel_um_per_sq_second/1000.
+        return vel_mm_per_second, min_vel_mm_per_second, \
+               accel_mm_per_sq_second, interval_count
 
     # <46>
     def set_soft_limit_values(self, min_value, max_value):

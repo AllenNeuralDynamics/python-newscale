@@ -165,21 +165,3 @@ class PoEInterface(HardwareInterface):
         address_msg = f"On address: '{address}', r" if address else "R"
         self.log.debug(f"{address_msg}ead back {repr(data)}")
         return data
-
-
-class MockInterface(HardwareInterface):
-    """Interface stub for testing (but could also be mocked with mock lib)."""
-
-    def __init__(self):
-        super().__init__()
-        self._last_cmd = None  # Save cmd so we can issue an appropriate reply.
-
-    def send(self, data: str, address: str = None):
-        address_msg = f"On address: '{address}', s" if address else "S"
-        self.log.debug(fr"{address_msg}ending: {repr(data)}")
-        self._last_cmd = data.strip("<>\r").split(" ")[0]
-
-    def read(self, address: str = None):
-        address_msg = f"On address: '{address}', r" if address else "R"
-        self.log.debug(fr"{address_msg}ead back '<{self._last_cmd}>\r'")
-        return self._last_cmd

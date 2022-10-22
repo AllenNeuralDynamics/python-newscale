@@ -72,7 +72,7 @@ StageReplyEncoding = \
     StageCmd.CLOSED_LOOP_STATE: "uint:24, int:32, int:32",
     StageCmd.MOTOR_STATUS: "uint:16",
     StageCmd.DRIVE_MODE: "uint:4, uint:16",  # TODO: check if we get 'R' as a reply back from the controller.
-    StageCmd.CLOSED_LOOP_SPEED: "int:24, uint:24, int:24, uint:16",
+    StageCmd.CLOSED_LOOP_SPEED: "uint:24, uint:24, uint:24, uint:16",
     StageCmd.ERROR_THRESHOLDS_AND_STALL_DETECTION: "uint:1, int:24, int:24",
     StageCmd.PID_COEFFICIENTS: "int:16, int:16, int:16",
     StageCmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
