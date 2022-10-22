@@ -21,7 +21,7 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 class M3LinearSmartStage:
     """A single axis stage on an interface."""
     #Constants
-    ENC_RES = 500.  # nanometers. Fixed value for speed calculations.
+    ENC_RES_NM = 500.  # nanometers. Fixed value for speed calculations.
     INTERVAL = 1000.  # us. Fixed value for speed calculations.
 
     def __init__(self, interface: HardwareInterface, address: str = None):
@@ -120,13 +120,14 @@ class M3LinearSmartStage:
                                             f"{duration:04x}"))
 
     # <05>
-    #def time_step(self, direction: Direction, step_count: int = None,
-    #              step_interval_us: float = None,
-    #              step_duration_us: float = None):
-    #    """Setup a specified number of steps to move through at a specific
-    #    interval."""
-    #    # Note: we cannot accept NEITHER as a direction
-    #    raise NotImplementedError
+    def time_step(self, direction: Direction, step_count: int = None,
+                  step_interval_us: float = None,
+                  step_duration_us: float = None):
+        """Setup a specified number of steps to move through at a specific
+        interval."""
+        # Note: we cannot accept NEITHER as a direction
+        # FIXME: we need get_time_interval_units to know how to convert.
+        raise NotImplementedError
 
     # <06>
     def distance_step(self, direction: Direction, step_size_mm: float = None):
@@ -277,10 +278,10 @@ class M3LinearSmartStage:
         INTERVAL_COUNT = 1
 
         vel_counts_per_interval = \
-            round((um_per_second/(self.__class__.ENC_RES/1000.)) * 256
+            round((um_per_second/(self.__class__.ENC_RES_NM/1000.)) * 256
                   * (INTERVAL_COUNT*(self.__class__.INTERVAL/1.0e6)))
         cutoff_vel_counts_per_interval = \
-            round(cutoff_vel_um_per_sec/(self.__class__.ENC_RES/1e3) * 256
+            round(cutoff_vel_um_per_sec/(self.__class__.ENC_RES_NM/1e3) * 256
                   * (INTERVAL_COUNT * (self.__class__.INTERVAL/1e6)))
         accel_counts_per_sq_interval = \
             round(vel_counts_per_interval
@@ -317,7 +318,7 @@ class M3LinearSmartStage:
             self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED))
         # Helper value.
         counts_per_interval_to_mm_per_sec = \
-            (self.__class__.ENC_RES*1.0e6) \
+            (self.__class__.ENC_RES_NM*1.0e6) \
             / (1.0e3*256*interval_count*self.__class__.INTERVAL*1.0e3)
         #  Convert raw register values to have familiar units where possible.
         vel_mm_per_second = \
@@ -334,9 +335,38 @@ class M3LinearSmartStage:
                accel_mm_per_sq_second, interval_count
 
     # <46>
-    def set_soft_limit_values(self, min_value, max_value):
+    def set_soft_limit_values(self, min_limit_mm, max_limit_mm):
+        """Set the soft limit values in mm.
+
+        Note: soft limits needs to be enabled for these values to have any
+            effect.
+
+        :param min_limit_mm:
+        :param max_limit_mm:
+        """
+        min_value = min_limit_mm * 1e6 / self.__class__.ENC_RES_NM
+        max_value = max_limit_mm * 1e6 / self.__class__.ENC_RES_NM
+        # FIXME: handle two's complement.
+        #   As-is, we cannot accept negative values.
         return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
-                                            min_value, max_value))
+                                            f"{min_value:032x}",
+                                            f"{max_value:032x}"))
+
+    # <47> Enable/Disable soft limits.
+    def set_soft_limit_state(self, soft_limits_enabled: bool):
+        """Enable or disable soft limits.
+
+        :param soft_limits_enabled: True to enable soft limits. False to
+            disable.
+        """
+        soft_limit_state = f"{1:04x}" if soft_limits_enabled else f"{0:04x}"
+        self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_STATES, soft_limit_state))
+
+    def enable_soft_limits(self):
+        self.set_soft_limit_state(True)
+
+    def disable_soft_limits(self):
+        self.set_soft_limit_state(False)
 
     # <52>
     def get_time_interval_units(self):
@@ -524,6 +554,12 @@ class MultiStage:
     def halt(self):
         """Halt all axes"""
         return {x: self.stages[x].halt() for x in self.stages.keys()}
+
+    @axis_check()
+    def set_soft_limit_states(self, **axes):
+        """set the state of the soft limits."""
+        # FIXME: implement this.
+        pass
 
     def close(self):
         """Release computer control of all axes."""
