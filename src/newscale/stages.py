@@ -177,6 +177,15 @@ class M3LinearSmartStage:
         return self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED,
                                             f"{speed_byte:02x}"))
 
+    # <09> variant
+    def get_open_loop_speed(self):
+        """Get the open loop speed.
+
+        :return: the open loop speed as a percent (0-100) of the max speed.
+        """
+        speed_byte = self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED))[1]
+        return (speed_byte/255.) * 100.
+
     # <10>
     def get_closed_loop_state_and_position(self):
         """Return a tuple of (state as a dict, position in mm, error in mm)."""
@@ -254,9 +263,13 @@ class M3LinearSmartStage:
         """Set the closed loop speed and accel in mm/sec and mm/(sec^2)
         respectively.
 
-        :param mm_per_second: speed in mm per second.
-        :param mm_per_squared_second: acceleration in mm per second squared.
+        :param vel_mm_per_second: speed in mm/sec.
+        :param accel_mm_per_squared_second: acceleration in mm/sec^2 .
+        :param min_vel_mm_per_second: minimum velocity in mm/sec. (Optional).
         """
+        assert vel_mm_per_second > min_vel_mm_per_second, \
+            "Error: requested velocity must be faster than the minimum" \
+            f"velocity: {min_vel_mm_per_second} [m/sec]."
         um_per_second = vel_mm_per_second * 1.0e3
         um_per_squared_second = accel_mm_per_squared_second * 1.0e3
         cutoff_vel_um_per_sec = min_vel_mm_per_second * 1e3
