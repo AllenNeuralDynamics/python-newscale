@@ -346,8 +346,16 @@ class M3LinearSmartStage:
         """
         min_value = min_limit_mm * 1e6 / self.__class__.ENC_RES_NM
         max_value = max_limit_mm * 1e6 / self.__class__.ENC_RES_NM
-        # FIXME: handle two's complement.
-        #   As-is, we cannot accept negative values.
+        # Check that requested values will fit in register representation.
+        assert -0x80000000 < min_value < 0x7FFFFFFF, "Error, requested " \
+            "minimum limit is out of range."
+        assert -0x80000000 < max_value < 0x7FFFFFFF, "Error, requested " \
+            "maximum limit is out of range."
+        # Convert to 32-bit, 2's complement representation for negative
+        # numbers. "Zero-stuff" up to 32 bits for positive numbers in the
+        # outgoing string representation.
+        min_value = min_value & 0xFFFFFFFF  # Force 32 bit size, two's comp.
+        max_value = max_value & 0xFFFFFFFF
         return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
                                             f"{min_value:032x}",
                                             f"{max_value:032x}"))
