@@ -11,7 +11,7 @@ from newscale.interfaces import HardwareInterface, USBInterface, \
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 from serial import Serial
 from time import perf_counter, sleep
-from typing import Tuple
+from typing import Tuple, Union, Literal
 
 # Constants
 TICKS_PER_UM = 2.0  # encoder ticks per micrometer.
@@ -49,9 +49,17 @@ class M3LinearSmartStage:
                        "version.")
         self.get_firmware_version()  # Necessary to handshake with the PC.
         self.set_drive_mode(DriveMode.CLOSED_LOOP)  # Prep stage for abs moves.
+        # Attributes.
+        self.time_interval_us = None
 
     @staticmethod
     def _get_cmd_str(cmd: Cmd, *args: str):
+        """Convert cmd + a sequence of input string args into the device
+        representation.
+
+        :param args: zero or more strings to append to the sequence. Both args
+            ``None`` and empty string will be ignored.
+        """
         args_str = " " + " ".join([a.upper() for a in args]) if args else ""
         return f"<{cmd.value.upper()}{args_str}>\r"
 
@@ -120,14 +128,49 @@ class M3LinearSmartStage:
                                             f"{duration:04x}"))
 
     # <05>
-    def time_step(self, direction: Direction, step_count: int = None,
-                  step_interval_us: float = None,
-                  step_duration_us: float = None):
-        """Setup a specified number of steps to move through at a specific
-        interval."""
-        # Note: we cannot accept NEITHER as a direction
-        # FIXME: we need get_time_interval_units to know how to convert.
-        raise NotImplementedError
+    def multi_time_step(self, direction: Union[Literal[Direction.FORWARD],
+                                               Literal[Direction.BACKWARD]],
+                        step_count: int = None,
+                        step_interval_us: float = None,
+                        step_duration_us: float = None):
+        """Do a specified number of open-loop steps of specific length with a
+        specific step period.
+
+            :param direction: which direction to step
+            :param step_count: how many steps to take
+            :param step_interval_us: time between the start of each step
+                in [us].
+            :param step_duration_us: how long to step for in [us].
+        """
+        # We cannot accept NEITHER as a direction.
+        assert direction != Direction.NEITHER, "Requested open-loop step " \
+            f"direction cannot be {Direction.NEITHER}."
+        assert step_count > 0, "Requested step count cannot be negative."
+        # Check that either all or none of the optional args were specified.
+        optional_args = [step_count, step_interval_us, step_duration_us]
+        assert optional_args == 3*[None] or \
+            all(v is not None for v in optional_args), "Optional args " \
+            "must be either all present or all absent"
+        assert step_duration_us < step_interval_us, "The requested duration " \
+            "of each step must be shorter than the interval between steps."
+        # Check size limits.
+        step_interval = step_interval_us / self.get_time_interval_units()
+        step_duration = step_duration_us / self.get_time_interval_units()
+        if optional_args != 3*[None]:
+            assert step_count <= 0xFFFF, "Requested step count exceeds limit."
+            assert step_interval <= 0xFFFF,\
+                "Requested step interval exceeds limit."
+            assert step_duration <= 0xFFFF,\
+                "Requested step duration exceeds limit"
+        # Create the strings.
+        step_count_str = f"{step_count:04x}" if step_count is not None else ""
+        step_interval = step_interval_us \
+            if step_interval_us is not None else ""
+        step_duration = step_duration_us \
+            if step_duration_us is not None else ""
+        self._send(self._get_cmd_str(Cmd.STEP_OPEN_LOOP, direction.value,
+                                     step_count_str,
+                                     step_interval, step_duration))
 
     # <06>
     def distance_step(self, direction: Direction, step_size_mm: float = None):
@@ -137,7 +180,7 @@ class M3LinearSmartStage:
         :param direction: direction to step in.
         :param step_size_mm: the size of the step. Optional.
         """
-        # TODO: warn if step size was never specified.
+        # TODO: warn if step size was never specified from the getgo.
         step_size_ticks = round(step_size_mm*TICKS_PER_MM)  # 32 bit unsigned.
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
         return self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,
@@ -150,7 +193,9 @@ class M3LinearSmartStage:
         return self.distance_step(Direction.NEITHER, step_size_mm)
 
     # <07>
-    # Skip this one.
+    # TODO: is this actually zeroing the stage position?
+    def toggle_absolute_or_relative_mode(self):
+        raise NotImplementedError
 
     # <08>
     def move_to_target(self, setpoint_mm: float = None):
@@ -357,8 +402,8 @@ class M3LinearSmartStage:
         min_value = min_value & 0xFFFFFFFF  # Force 32 bit size, two's comp.
         max_value = max_value & 0xFFFFFFFF
         return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
-                                            f"{min_value:032x}",
-                                            f"{max_value:032x}"))
+                                            f"{min_value:08x}",
+                                            f"{max_value:08x}"))
 
     # <47> Enable/Disable soft limits.
     def set_soft_limit_state(self, soft_limits_enabled: bool):
@@ -387,9 +432,14 @@ class M3LinearSmartStage:
             representing the interval, and the second value is a string
             representing the units. (The second value should always be "usec".)
         """
-        _, unit_str = self._send(self._get_cmd_str(Cmd.TIME_INTERVAL_UNITS))
-        val_str, unit_str = unit_str.split()
-        return float(val_str), unit_str
+        # Cache this since it won't change.
+        # Don't use @cache or @cached_property for pre 3.8 compatibility.
+        if self.time_interval_us is not None:
+            return self.time_interval_us
+        _, data_str = self._send(self._get_cmd_str(Cmd.TIME_INTERVAL_UNITS))
+        val_str, _ = data_str.split() # last chunk is the string 'USEC'
+        self.time_interval_us = float(val_str)
+        return self.time_interval_us
 
 
 # Decorators
