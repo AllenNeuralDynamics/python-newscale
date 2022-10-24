@@ -441,6 +441,9 @@ class M3LinearSmartStage:
         self.time_interval_us = float(val_str)
         return self.time_interval_us
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
 
 # Decorators
 def axis_check(*args_to_skip: str):
