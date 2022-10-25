@@ -11,7 +11,8 @@ from newscale.interfaces import HardwareInterface, USBInterface, \
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 from serial import Serial
 from time import perf_counter, sleep
-from typing import Tuple, Union, Literal
+from typing import Tuple, Union
+
 
 # Constants
 TICKS_PER_UM = 2.0  # encoder ticks per micrometer.
@@ -20,6 +21,7 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 
 class M3LinearSmartStage:
     """A single axis stage on an interface."""
+
     #Constants
     ENC_RES_NM = 500.  # nanometers. Fixed value for speed calculations.
     INTERVAL = 1000.  # us. Fixed value for speed calculations.
@@ -31,7 +33,7 @@ class M3LinearSmartStage:
         :param address: address to communicate to the device on the specified
             interface. Optional. If unspecified, commands will be passed
             through directly without trying to select an axis first.
-            
+
         .. code-block:: python
 
             from newscale.interfaces import USBInterface
@@ -39,7 +41,7 @@ class M3LinearSmartStage:
 
             interface = USBInterface(port='COM4'),
             stage = M3LinearSmartStage(interface, "01")
-        
+
         """
         # Either address can be passed in XOR interface
         self.log = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -47,10 +49,13 @@ class M3LinearSmartStage:
         self.interface = interface
         self.log.debug("Establishing host control by requesting firmware "
                        "version.")
+        # Note: some commands will reply with <24> (ILLEGAL_COMMAND) if host
+        # control is not yet established.
         self.get_firmware_version()  # Necessary to handshake with the PC.
         self.set_drive_mode(DriveMode.CLOSED_LOOP)  # Prep stage for abs moves.
         # Attributes.
         self.time_interval_us = None
+        self.step_size_specified = False
 
     @staticmethod
     def _get_cmd_str(cmd: Cmd, *args: str):
@@ -93,11 +98,10 @@ class M3LinearSmartStage:
     def get_firmware_version(self):
         """Get the firmware version.
 
-        Note: this command is issued on startup to establish computer control.
-        To release computer control, issue a <02> command.
+        Note: this command is issued on startup, which has the effect of
+        establishing computer control. To release computer control, issue a
+        :meth:`close` or create the object inside a ``with`` statement.
 
-        Note: some commands will reply with <24> (ILLEGAL_COMMAND) if host
-        control is not yet established.
         """
         return self._send(self._get_cmd_str(Cmd.FIRMWARE_VERSION))[-1]
 
@@ -114,7 +118,9 @@ class M3LinearSmartStage:
     def run(self, direction: Direction, seconds: float = None):
         """Enable motor for a specified time or without limit if unspecified.
 
-        :param direction: forward or reverse
+        :param direction: which direction to run:
+            :attr:`~newscale.device_codes.Direction.FORWARD` or
+            :attr:`~newscale.device_codes.Direction.REVERSE` only.
         :param seconds: time to run the motor in seconds (with increments of
             tenths of seconds).
         """
@@ -128,19 +134,20 @@ class M3LinearSmartStage:
                                             f"{duration:04x}"))
 
     # <05>
-    def multi_time_step(self, direction: Union[Literal[Direction.FORWARD],
-                                               Literal[Direction.BACKWARD]],
+    def multi_time_step(self, direction: Direction,
                         step_count: int = None,
                         step_interval_us: float = None,
                         step_duration_us: float = None):
         """Do a specified number of open-loop steps of specific length with a
         specific step period.
 
-            :param direction: which direction to step
-            :param step_count: how many steps to take
-            :param step_interval_us: time between the start of each step
-                in [us].
-            :param step_duration_us: how long to step for in [us].
+        :param direction: which direction to step.
+            :obj:`~newscale.device_codes.Direction.FORWARD` or
+            :obj:`~newscale.device_codes.Direction.REVERSE` only.
+        :param step_count: how many steps to take
+        :param step_interval_us: time between the start of each step
+            in [us].
+        :param step_duration_us: how long to step for in [us].
         """
         # We cannot accept NEITHER as a direction.
         assert direction != Direction.NEITHER, "Requested open-loop step " \
@@ -173,29 +180,52 @@ class M3LinearSmartStage:
                                      step_interval, step_duration))
 
     # <06>
-    def distance_step(self, direction: Direction, step_size_mm: float = None):
-        """Take a step of size `step_size` in the specified direction.
+    def _distance_step(self, direction: Direction = Direction.NEITHER,
+                      step_size_mm: float = None):
+        """Take a step of size ``step_size`` in the specified direction.
         If no step size is specified, the previous step size will be used.
+        If :attr:`~newscale.device_codes.Direction.NEITHER` is specified
+        as the ``direction``, then ``step_size_mm`` is not optional and will
+        save the step size.
 
         :param direction: direction to step in.
+            :attr:`~newscale.device_codes.Direction.NEITHER` is also
+            acceptable, in which case the step size will be saved as default.
         :param step_size_mm: the size of the step. Optional.
         """
-        # TODO: warn if step size was never specified from the getgo.
         step_size_ticks = round(step_size_mm*TICKS_PER_MM)  # 32 bit unsigned.
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
+        # Save whether we have ever configured a step size before.
+        if step_size_mm is not None:
+            self.step_size_specified = True
+        if not self.step_size_specified:
+            self.log.warning("Distance step step size was never specified.")
         return self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,
                                             direction.value,
                                             f"{step_size_ticks:08x}"))
 
     # <06> variant
     def set_distance_step_size(self, step_size_mm: float):
-        """Specify the step size taken (in mm) in :meth:`distance_step`"""
-        return self.distance_step(Direction.NEITHER, step_size_mm)
+        """Specify the step size taken (in mm) in :meth:`step`
+
+        :param step_size_mm: the size of the step. Optional.
+        """
+        return self._distance_step(Direction.NEITHER, step_size_mm)
+
+    # <06> variant
+    def step(self, direction: Direction):
+        """Take a step in the specified direction of the pre-specied step size.
+
+        :param direction: direction to step in.
+            :attr:`~newscale.device_codes.Direction.NEITHER` is also
+            acceptable, in which case the step size will be saved as default.
+        """
+        self._distance_step(direction)
 
     # <07>
-    # TODO: is this actually zeroing the stage position?
-    def toggle_absolute_or_relative_mode(self):
-        raise NotImplementedError
+    def clear_encoder_count(self):
+        """Clear the encoder count, which sets the current position to 0."""
+        return self._send(self._get_cmd_str(Cmd.CLEAR_ENCODER_COUNT))
 
     # <08>
     def move_to_target(self, setpoint_mm: float = None):
@@ -203,13 +233,20 @@ class M3LinearSmartStage:
 
         :param setpoint_mm:  positive or negative setpoint.
         """
-        # TODO: convert target setpoint to encoder ticks.
         if setpoint_mm is None:
             return self._get_cmd_str(Cmd.MOVE_TO_TARGET)
-        step_size_ticks = round(setpoint_mm*TICKS_PER_MM)
-        assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
+        setpoint_ticks = round(setpoint_mm*TICKS_PER_MM)
+        # Check that requested values will fit in register representation.
+        # Note: We can't use bit_length() for negative numbers.
+        assert -0x80000000 < setpoint_ticks < 0x7FFFFFFF, \
+            "Error, requested maximum limit is out of range."
+        # Convert to 32-bit, 2's complement representation for negative
+        # numbers. i.e: mask with the expected size type and
+        # "Zero-stuff" up to 32 bits for positive numbers in the
+        # outgoing string representation.
+        setpoint_ticks = setpoint_ticks & 0xFFFFFFFF
         return self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET,
-                                            f"{step_size_ticks:08x}"))
+                                            f"{setpoint_ticks:08x}"))
 
     # <09>
     def set_open_loop_speed(self, percent: float):
@@ -234,7 +271,11 @@ class M3LinearSmartStage:
 
     # <10>
     def get_closed_loop_state_and_position(self):
-        """Return a tuple of (state as a dict, position in mm, error in mm)."""
+        """Return a 3-tuple of (state as a dict, position in mm, error in mm).
+
+        :return: a 3-tuple of
+            ``(<state in dict>, <position in mm>, <position error in mm>)``
+        """
         # use get_state
         _, state_int, pos, error = \
             self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
@@ -353,9 +394,9 @@ class M3LinearSmartStage:
     def get_closed_loop_speed_settings(self):
         """Get closed loop speed and acceleration settings.
 
-        :returns: a 4 tuple of (<velocity in mm/sec>,
-        <minimum velocity in mm/sec>, <acceleration in mm/sec^2>,
-        <interval count>)
+        :return: a 4-tuple of ``(<speed in [mm/s]>,
+            <minimum speed in [mm/s]>, <acceleration in [mm/s^2]>,
+            <interval count>)``
         """
         # Note that conversion equations come from datasheet.
         _, vel_counts_per_interval, min_vel_counts_per_interval, \
@@ -386,12 +427,13 @@ class M3LinearSmartStage:
         Note: soft limits needs to be enabled for these values to have any
             effect.
 
-        :param min_limit_mm:
-        :param max_limit_mm:
+        :param min_limit_mm: The minimum limit in [mm].
+        :param max_limit_mm: The maximum limit in [mm].
         """
         min_value = min_limit_mm * 1e6 / self.__class__.ENC_RES_NM
         max_value = max_limit_mm * 1e6 / self.__class__.ENC_RES_NM
         # Check that requested values will fit in register representation.
+        # Note: We can't use bit_length() for negative numbers.
         assert -0x80000000 < min_value < 0x7FFFFFFF, "Error, requested " \
             "minimum limit is out of range."
         assert -0x80000000 < max_value < 0x7FFFFFFF, "Error, requested " \
@@ -415,9 +457,11 @@ class M3LinearSmartStage:
         soft_limit_state = f"{1:04x}" if soft_limits_enabled else f"{0:04x}"
         self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_STATES, soft_limit_state))
 
+    # <47> variant
     def enable_soft_limits(self):
         self.set_soft_limit_state(True)
 
+    # <47> variant
     def disable_soft_limits(self):
         self.set_soft_limit_state(False)
 
@@ -428,16 +472,14 @@ class M3LinearSmartStage:
         Note: M3-LS, M3-L, and M3-FS have different time interval units, but
         time interval units are the same within these "sub-families."
 
-        :return: a 2-tuple of (<float>, <str>) where the first value is a float
-            representing the interval, and the second value is a string
-            representing the units. (The second value should always be "usec".)
+        :return: the time interval in [us].
         """
         # Cache this since it won't change.
         # Don't use @cache or @cached_property for pre 3.8 compatibility.
         if self.time_interval_us is not None:
             return self.time_interval_us
         _, data_str = self._send(self._get_cmd_str(Cmd.TIME_INTERVAL_UNITS))
-        val_str, _ = data_str.split() # last chunk is the string 'USEC'
+        val_str, _ = data_str.split()  # last chunk is the string 'USEC'
         self.time_interval_us = float(val_str)
         return self.time_interval_us
 

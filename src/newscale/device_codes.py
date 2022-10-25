@@ -28,7 +28,7 @@ class StageCmd(StrEnum):
     RUN = "04"
     STEP_OPEN_LOOP = "05"  # Step at a fixed speed for a pre-specified time
     STEP_CLOSED_LOOP = "06"  # Step for a fixed distance
-    TOGGLE_ABS_REL = "07"
+    CLEAR_ENCODER_COUNT = "07"
     MOVE_TO_TARGET = "08"  # Move to a specified setpoint
     OPEN_LOOP_SPEED = "09"
     CLOSED_LOOP_STATE = "10"
