@@ -71,11 +71,11 @@ class USBInterface(HardwareInterface):
 
         .. code-block:: python
 
-            interface = USBInterface('COM4')  # OR
-            interface = USBInterface('COM4', 115200)  # OR
+            interface = USBInterface('COM4')  # take the default baud rate.
+            interface = USBInterface('COM4', 115200)
 
             from serial import Serial
-            ser = Serial('COM4', baudrate=250000)
+            ser = Serial('COM4', baud_rate=250000)
             interface = USBInterface(serial=ser)
 
         """

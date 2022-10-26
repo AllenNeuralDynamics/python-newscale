@@ -852,14 +852,14 @@ class MultiStage:
 class USBXYZStage(MultiStage):
     """An XYZ Stage from a single USB interface."""
 
-    def __init__(self, port: str = None,
+    def __init__(self, port: str = None, baud_rate: int = 250000,
                  usb_interface: USBInterface = None):
         if not ((port is None) ^ (usb_interface is None)):
             raise SyntaxError("Exclusively either port or usb_interface"
                               "(i.e: one or the other, but not both) options "
                               "must be specified.")
         self.interface = usb_interface if usb_interface and not port \
-            else USBInterface(port)
+            else USBInterface(port, baud_rate)
         # Create 3 stages with corresponding addresses.
         stages = {'x': M3LinearSmartStage(self.interface, '01'),
                   'y': M3LinearSmartStage(self.interface, '02'),
