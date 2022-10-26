@@ -20,7 +20,7 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 
 
 class M3LinearSmartStage:
-    """A single axis stage on an interface."""
+    """A single axis stage connected to the specified interface."""
 
     #Constants
     ENC_RES_NM = 500.  # nanometers. Fixed value for speed calculations.
@@ -111,11 +111,11 @@ class M3LinearSmartStage:
     # <02>
     def close(self):
         """Release host control."""
-        return self._send(self._get_cmd_str(Cmd.RELEASE_HOST_CONTROL))
+        self._send(self._get_cmd_str(Cmd.RELEASE_HOST_CONTROL))
 
     # <03>
     def halt(self):
-        return self._send(self._get_cmd_str(Cmd.HALT))
+        self._send(self._get_cmd_str(Cmd.HALT))
 
     # <04>
     def run(self, direction: Direction, seconds: float = None):
@@ -132,11 +132,12 @@ class M3LinearSmartStage:
         assert direction is not Direction.NEITHER, \
             "Direction must be forward or reverse."
         if seconds is None:
-            return self._send(self._get_cmd_str(Cmd.RUN, direction.value))
+            self._send(self._get_cmd_str(Cmd.RUN, direction.value))
+            return
         duration = round(seconds*10)  # value is encoded in tenths of seconds.
-        assert duration < 256, "Time input value exceeds maximum value."
-        return self._send(self._get_cmd_str(Cmd.RUN, direction.value,
-                                            f"{duration:04x}"))
+        assert duration <= 0xFF, "Run duration exceeds maximum value."
+        self._send(self._get_cmd_str(Cmd.RUN, direction.value,
+                                     f"{duration:04x}"))
 
     # <05>
     def multi_time_step(self, direction: Direction,
@@ -205,9 +206,8 @@ class M3LinearSmartStage:
             self.step_size_specified = True
         if not self.step_size_specified:
             self.log.warning("Distance step step size was never specified.")
-        return self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,
-                                            direction.value,
-                                            f"{step_size_ticks:08x}"))
+        self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,direction.value,
+                                     f"{step_size_ticks:08x}"))
 
     # <06> variant
     def set_distance_step_size(self, step_size_mm: float):
@@ -215,11 +215,12 @@ class M3LinearSmartStage:
 
         :param step_size_mm: the size of the step. Optional.
         """
-        return self._distance_step(Direction.NEITHER, step_size_mm)
+        self._distance_step(Direction.NEITHER, step_size_mm)
 
     # <06> variant
     def step(self, direction: Direction):
         """Take a step in the specified direction of the pre-specied step size.
+        Step size is specified with :meth:`set_distance_step_size`.
 
         :param direction: direction to step in.
             :attr:`~newscale.device_codes.Direction.NEITHER` is also
@@ -230,7 +231,7 @@ class M3LinearSmartStage:
     # <07>
     def clear_encoder_count(self):
         """Clear the encoder count, which sets the current position to 0."""
-        return self._send(self._get_cmd_str(Cmd.CLEAR_ENCODER_COUNT))
+        self._send(self._get_cmd_str(Cmd.CLEAR_ENCODER_COUNT))
 
     # <08>
     def move_to_target(self, setpoint_mm: float = None):
@@ -238,22 +239,25 @@ class M3LinearSmartStage:
         The stage's drive mode must first be set to closed loop mode first via
         :meth:`set_drive_mode`.
 
+        Note: On instantiation, the stage is put in
+        :attr:`~newscale.device_codes.DriveMode.CLOSED_LOOP` mode.
+
         :param setpoint_mm:  positive or negative setpoint.
         """
         if setpoint_mm is None:
             return self._get_cmd_str(Cmd.MOVE_TO_TARGET)
         setpoint_ticks = round(setpoint_mm*TICKS_PER_MM)
         # Check that requested values will fit in register representation.
-        # Note: We can't use bit_length() for negative numbers.
-        assert -0x80000000 < setpoint_ticks < 0x7FFFFFFF, \
+        # Note: We can't use bit_length() for signed numbers.
+        assert -0x80000000 <= setpoint_ticks <= 0x7FFFFFFF, \
             "Error, requested maximum limit is out of range."
-        # Convert to 32-bit, 2's complement representation for negative
+        # Convert to 32-bit, 2's complement representation for signed
         # numbers. i.e: mask with the expected size type and
         # "Zero-stuff" up to 32 bits for positive numbers in the
         # outgoing string representation.
         setpoint_ticks = setpoint_ticks & 0xFFFFFFFF
-        return self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET,
-                                            f"{setpoint_ticks:08x}"))
+        self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET,
+                                     f"{setpoint_ticks:08x}"))
 
     # <09>
     def set_open_loop_speed(self, percent: float):
@@ -264,8 +268,8 @@ class M3LinearSmartStage:
         """
         speed_byte = round(percent/100 * 255)
         assert 1 < speed_byte < 256, "speed setting out of range."
-        return self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED,
-                                            f"{speed_byte:02x}"))
+        self._send(self._get_cmd_str(Cmd.OPEN_LOOP_SPEED,
+                                     f"{speed_byte:02x}"))
 
     # <09> variant
     def get_open_loop_speed(self):
@@ -291,7 +295,9 @@ class M3LinearSmartStage:
 
     # <10> variant
     def get_position(self):
-        """return the position of this axis in [mm]."""
+        """
+        :return: the position of this stage in [mm].
+        """
         _, _, pos, _ = self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
         return pos/TICKS_PER_MM
 
@@ -314,9 +320,11 @@ class M3LinearSmartStage:
 
     # <19>
     def get_motor_status(self):
-        """Return a dictionary, keyed by
-        :obj:`~newscale.device_codes.StateBit` indicating the motor's
-        status."""
+        """
+        :return: a dict, keyed by
+            :obj:`~newscale.device_codes.StateBit`, indicating the motor's
+            status.
+        """
         _, state_int = self._send(self._get_cmd_str(Cmd.MOTOR_STATUS))
         return self._parse_motor_flags(state_int)
 
@@ -353,11 +361,14 @@ class M3LinearSmartStage:
             stage.set_drive_mode(DriveMode.CLOSED_LOOP)
 
         """
-        return self._send(self._get_cmd_str(Cmd.DRIVE_MODE, drive_mode.value))
+        self._send(self._get_cmd_str(Cmd.DRIVE_MODE, drive_mode.value))
 
     # <20> variant
     def get_drive_mode(self):
-        """Return the mode currently set."""
+        """Return the mode currently set.
+
+        :return: a :obj:`~newscale.device_codes.DriveMode` enum
+        """
         _, mode = self._send(self._get_cmd_str(Cmd.DRIVE_MODE,
                                                DriveMode.MODE_QUERY.value))
         return DriveMode(f"{mode:x}")
@@ -402,12 +413,11 @@ class M3LinearSmartStage:
         assert len(bin(accel_counts_per_sq_interval)[2:]) <= 24,\
             "Requested acceleration is too large."
         # Note that interval duration is fixed for now.
-        return self._send(
-            self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED,
-                              f"{vel_counts_per_interval:06x}",
-                              f"{cutoff_vel_counts_per_interval:06x}",
-                              f"{accel_counts_per_sq_interval:06x}",
-                              f"{interval_duration_intervals:04x}"))
+        self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED,
+                                     f"{vel_counts_per_interval:06x}",
+                                     f"{cutoff_vel_counts_per_interval:06x}",
+                                     f"{accel_counts_per_sq_interval:06x}",
+                                     f"{interval_duration_intervals:04x}"))
 
     # <40> variant
     def get_closed_loop_speed_and_accel(self):
@@ -440,7 +450,8 @@ class M3LinearSmartStage:
                accel_mm_per_sq_second, interval_count
 
     # <46>
-    def set_soft_limit_values(self, min_limit_mm: float, max_limit_mm: float):
+    def set_soft_limits(self, min_limit_mm: float, max_limit_mm: float,
+                        margin_mm: float = 0):
         """Set the soft limit values in mm.
 
         Note: soft limits needs to be enabled via :meth:`enable_soft_limits`
@@ -448,23 +459,46 @@ class M3LinearSmartStage:
 
         :param min_limit_mm: The minimum limit in [mm].
         :param max_limit_mm: The maximum limit in [mm].
+        :param margin_mm: The distance in DriveMode[mm] before each limit where
+            the :attr:`~newscale.device_codes.StateBit.FORWARD_LIMIT_REACHED`
+            or :attr:`~newscale.device_codes.StateBit.REVERSE_LIMIT_REACHED`
+            :obj:`~newscale.device_codes.StateBit` flags will remain active
+            after the limit has been tripped (aka: hysteresis).
         """
-        min_value = min_limit_mm * 1e6 / self.__class__.ENC_RES_NM
-        max_value = max_limit_mm * 1e6 / self.__class__.ENC_RES_NM
+        # Convert to encoder counts.
+        min_value = round(min_limit_mm * 1e6 / self.__class__.ENC_RES_NM)
+        max_value = round(max_limit_mm * 1e6 / self.__class__.ENC_RES_NM)
+        margin_value = round(margin_mm * 1e6 / self.__class__.ENC_RES_NM)
         # Check that requested values will fit in register representation.
-        # Note: We can't use bit_length() for negative numbers.
-        assert -0x80000000 < min_value < 0x7FFFFFFF, "Error, requested " \
+        # Note: We can't use bit_length() for signed numbers.
+        assert -0x80000000 <= min_value <= 0x7FFFFFFF, "Error, requested " \
             "minimum limit is out of range."
-        assert -0x80000000 < max_value < 0x7FFFFFFF, "Error, requested " \
+        assert -0x80000000 <= max_value <= 0x7FFFFFFF, "Error, requested " \
             "maximum limit is out of range."
-        # Convert to 32-bit, 2's complement representation for negative
+        assert 0x0000 <= margin_value <= 0xFFFF, "Error, requested " \
+            "error margin (hysteresis) value is out of range."
+        # Convert to 32-bit, 2's complement representation for signed
         # numbers. "Zero-stuff" up to 32 bits for positive numbers in the
         # outgoing string representation.
         min_value = min_value & 0xFFFFFFFF  # Force 32 bit size, two's comp.
         max_value = max_value & 0xFFFFFFFF
-        return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
-                                            f"{min_value:08x}",
-                                            f"{max_value:08x}"))
+        self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
+                                     f"{min_value:08x}", f"{max_value:08x}",
+                                     f"{margin_value:04x}"))
+
+    # <46> variant
+    def get_soft_limits(self):
+        """Get the soft travel limit minimum, maximum, and error margin.
+
+        :return: 3-Tuple of
+            ``<min limit [mm]>, <max limit [mm]>, <error margin [mm]>)`` where
+            the error margin represents a value before the limit where the
+            :attr:`~newscale.device_codes.StateBit.FORWARD_LIMIT_REACHED` or
+            :attr:`~newscale.device_codes.StateBit.REVERSE_LIMIT_REACHED`
+            :obj:`~newscale.device_codes.StateBit` flags will remain active
+            after the limit has been tripped (aka: hysteresis).
+        """
+        return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES))[1:]
 
     # <47> Enable/Disable soft limits.
     def _set_soft_limit_state(self, soft_limits_enabled: bool):
@@ -564,7 +598,7 @@ class MultiStage:
 
     @axis_check()
     def _set_drive_mode(self, drive_mode: DriveMode):
-        """Set the specified axes to the specified modes.
+        """Set all axes to the specified modes.
 
         :param drive_mode: drive mode specified as
             :attr:`~newscale.device_codes.DriveMode.OPEN_LOOP` or
@@ -574,12 +608,12 @@ class MultiStage:
             axis.set_drive_mode(drive_mode)
 
     def set_open_loop_mode(self):
-        """Put all axes in open loop mode."""
+        """Set all axes to open loop mode."""
         axes_dict = {x: DriveMode.OPEN_LOOP for x in self.stages.keys()}
         self._set_drive_mode(**axes_dict)
 
     def set_closed_loop_mode(self):
-        """Put all axes in closed loop mode."""
+        """Set all axes to closed loop mode."""
         axes_dict = {x: DriveMode.CLOSED_LOOP for x in self.stages.keys()}
         self._set_drive_mode(**axes_dict)
 
@@ -597,6 +631,12 @@ class MultiStage:
             stage has reached its destination.
         :param axes: one or more axes specified by name with their move amount
             specified in [mm].
+
+        .. code-block:: python
+
+            stages.move_absolute(x=5, y=7.5, z=10) # move x, y, and z
+            stages.move_absolute(x=7.5, wait=False)  # move x only. Don't wait.
+
         """
         for axis_name, abs_position_mm in axes.items():
             self.stages[axis_name].move_to_target(abs_position_mm)
@@ -652,15 +692,20 @@ class MultiStage:
 
     @axis_check()
     def get_position(self, *axes: str):
-        """Retrieve the specified axes positions (in mm) as a dict.
+        """Retrieve the specified axes positions (or all if none are specified)
+        in [mm] as a dict.
 
         :param axes: an unlimited number of axes specified by name (string).
+        :return: a dict, keyed by axis, of the position per axis in [mm].
 
         .. code-block:: python
 
-            stages.get_position('x', 'y', 'z')  # Get specified positions OR
+            stages.get_position()  # Get all positions OR
+            stages.get_position('x', 'y', 'z')  # Get specified axis positions.
 
         """
+        if not axes:  # Populate all axes if none are specified.
+            axes = self.stages.keys()
         return {x: self.stages[x].get_position() for x in axes}
 
     @axis_check('global_speed')
@@ -686,7 +731,8 @@ class MultiStage:
 
     @axis_check()
     def get_open_loop_speed(self, *axes: str):
-        """Get the speeds of the specified axes as a percent.
+        """Get the speeds of the specified axes (or all if none are specified)
+        as a percent.
 
         :return: a dict, keyed by axis, of the speed setting per axis.
 
@@ -695,6 +741,8 @@ class MultiStage:
             stages.get_open_loop_speed('x', 'z')
 
         """
+        if not axes:  # Populate all axes if none are specified.
+            axes = self.stages.keys()
         return {x: self.stages[x].get_open_loop_speed() for x in axes}
 
     @axis_check('global_setting')
@@ -731,7 +779,8 @@ class MultiStage:
 
     @axis_check()
     def get_closed_loop_speed_and_accel(self, *axes):
-        """Get the speed and accel settings of the specified axes in a dict.
+        """Get the speed and accel settings of the specified axes (or all
+        if none are specifed) as a dict.
 
         :return: a dict of 4-tuples, keyed by axis, of the settings per
             specified axis. 4-tuples contain: ``(<speed in [mm/s]>,
@@ -740,9 +789,12 @@ class MultiStage:
 
         .. code-block:: python
 
-            stages.get_closed_loop_speed_and_accel('x', 'y', 'z')
+            stages.get_closed_loop_speed_and_accel('x', 'y', 'z')  # Get specific axes.
+            stages.get_closed_loop_speed_and_accel()  # Get all xes.
 
         """
+        if not axes:  # Populate all axes if none are specified.
+            axes = self.stages.keys()
         return {x: self.stages[x].get_closed_loop_speed_and_accel()
                 for x in axes}
 
@@ -752,19 +804,32 @@ class MultiStage:
         return {x: self.stages[x].halt() for x in self.stages.keys()}
 
     @axis_check()
-    def set_soft_limits(self, **axes):
+    def set_soft_limits(self, **axes: Tuple[float, float, Optional[float]]):
         """set the soft limits per axis.
 
-        :param: dict, keyed by axis, of 2-tuples representing
-            ``(<min limit>, <max limit>)`` in [mm].
+        :param: dict, keyed by axis, of 2-or-3-tuples representing
+            ``(<min limit>, <max limit>, <Optional error margin>)`` in [mm].
 
         .. code-block:: python
 
-            stages.set_soft_limits(x=(-0.25, 9.75), y=(0, 3.0))
+            stages.set_soft_limits(x=(-0.25, 9.75, 0.001),  # set x limits with error margin
+                                   y=(0, 3.0))  # set y limits without error margin
 
         """
         for axis_name, (min_limit, max_limit) in axes.items():
             self.stages[axis_name].set_soft_limits(min_limit, max_limit)
+
+    @axis_check()
+    def get_soft_limits(self, *axes):
+        """Retrieve the soft limits for specified axes (or all if none are
+        specified).
+
+        :return: a dict, keyed by axis name, of 3-tuples representing:
+            ``(<min limit>, <max limit>, <error margin>)`` in [mm].
+        """
+        if not axes:  # Populate all axes if none are specified.
+            axes = self.stages.keys()
+        return {x: self.stages[x].get_soft_limits() for x in axes}
 
     def enable_soft_limits(self):
         """Enable software travel limits on all axes."""

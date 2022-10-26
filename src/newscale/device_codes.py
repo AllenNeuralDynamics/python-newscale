@@ -131,7 +131,9 @@ def parse_tr_reply(reply: str):
 
 # Extra Structures for specifying stage commands and parsing stage replies.
 class StateBit(Enum):
-    """Bitfield offsets for interpretting commands <10> and <19>"""
+    """Bitfield offsets for interpretting the stage's state replies from
+    commands :attr:`~newscale.devices.StageCmd.CLOSED_LOOP_STATE` (<10>) and
+    :attr:`~newscale.devices.StageCmd.MOTOR_STATUS` (<19>)."""
     RESERVED_0 = 0
     DIRECTION = 1
     RUNNING = 2
