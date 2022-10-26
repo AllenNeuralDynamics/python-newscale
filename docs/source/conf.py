@@ -42,4 +42,5 @@ html_static_path = ['_static']
 
 # Sphinx Options.
 autoclass_content = 'both'
+autodoc_inheret_docstrings = True
 toc_object_entries_show_parents = 'hide' # hide the full method path.

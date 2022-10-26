@@ -2,6 +2,7 @@
 
 from bitstring import BitArray
 from enum import Enum
+from bidict import bidict
 
 try:
     from enum import StrEnum  # a 3.11 freature.
@@ -57,6 +58,7 @@ class TransceiverCmd(StrEnum):
     Example: 'TR<01>', 'TR<A2>', etc.
     """
     FIRMWARE_VERSION = "01"
+    BAUD_RATE = "54"
     STAGE_SELECT = "A0"
     MAC_ADDRESS = "A2"
 
@@ -78,7 +80,7 @@ StageReplyEncoding = \
     StageCmd.SOFT_LIMIT_VALUES: "int:32, int:32, uint:16",
     StageCmd.SOFT_LIMIT_STATES: "uint:4",
     StageCmd.TIME_INTERVAL_UNITS: "",  # Response is a string.
-    StageCmd.BAUD_RATE: "uint:4, uint:8",  # TODO: make a baud rate Enum
+    StageCmd.BAUD_RATE: "uint:4, uint:8",
     StageCmd.EEPROM_WRITING_STATE: "uint:8, uint:4",
     StageCmd.RUN_FREQ_CALIBRATION: "uint:4, uint:8, uint:8",
     #StageCmd.POSITION_CONTROL_LOG: ""
@@ -87,7 +89,8 @@ StageReplyEncoding = \
 TransceiverReplyEncoding = \
 {
     TransceiverCmd.FIRMWARE_VERSION: "int:4",
-    TransceiverCmd.STAGE_SELECT: "uint:8, uint:4"
+    TransceiverCmd.BAUD_RATE: "uint:4, uint:8",
+    TransceiverCmd.STAGE_SELECT: "uint:8, uint:4",
 }
 
 
@@ -158,6 +161,16 @@ class StateBit(Enum):
     CLOSED_LOOP_ENABLED = 21
     ACCELERATING = 22
     STALLED = 23
+
+
+BaudRateCode = \
+    bidict({
+        19200: "00",
+        38400: "01",
+        57600: "02",
+        115200: "03",
+        250000: "04"
+    })
 
 
 class Direction(StrEnum):

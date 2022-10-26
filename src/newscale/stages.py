@@ -5,7 +5,7 @@ from bitstring import BitArray  # for unpacking
 from functools import wraps
 from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
     parse_stage_reply
-from newscale.device_codes import StageCmd as Cmd
+from newscale.device_codes import StageCmd as Cmd, BaudRateCode
 from newscale.interfaces import HardwareInterface, USBInterface, \
     PoEInterface
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
@@ -541,6 +541,27 @@ class M3LinearSmartStage:
         val_str, _ = data_str.split()  # last chunk is the string 'USEC'
         self.time_interval_us = float(val_str)
         return self.time_interval_us
+
+    # <54> variant
+    def set_baud_rate(self, baud_rate: int):
+        """Set the stage uart baud rate from the options available.
+        Baud rate changes take effect on the next power cycle.
+
+        `Warning`: the uart pins are not exposed on most M3 linear stages,
+        whose wires only expose the SPI interface.
+        """
+        assert baud_rate in BaudRateCode, \
+            "Requested input baud rate is invalid."
+        baud_rate_code = BaudRateCode[baud_rate]
+        self._send(self._get_cmd_str(Cmd.BAUD_RATE, baud_rate_code))
+
+    # <54> variant
+    def get_baud_rate(self):
+        """get the stage's communication baud rate.
+        :return: the stage's baud rate as an integer
+        """
+        _, _, br_code = self._send(self._get_cmd_str(Cmd.BAUD_RATE))
+        return BaudRateCode.inverse[f"{br_code:02x}"]
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()

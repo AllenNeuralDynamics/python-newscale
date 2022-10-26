@@ -2,12 +2,11 @@
 
 from newscale.stages import USBXYZStage
 from newscale.device_codes import Direction
-from newscale.interfaces import MockInterface, USBInterface
 from random import uniform
 from time import sleep, perf_counter
-import logging
 
 # Uncomment for some prolific log statements.
+#import logging
 #logger = logging.getLogger()
 #logger.setLevel(logging.DEBUG)
 #logger.addHandler(logging.StreamHandler())

@@ -3,7 +3,8 @@
 import logging
 from abc import ABC, abstractmethod
 from newscale.device_codes import TransceiverCmd as Cmd
-from newscale.device_codes import TRANSCEIVER_PREFIX, parse_tr_reply
+from newscale.device_codes import TRANSCEIVER_PREFIX, parse_tr_reply, \
+    BaudRateCode
 from serial import Serial
 from socket import socket, AF_INET, SOCK_STREAM
 
@@ -53,8 +54,8 @@ class HardwareInterface:
 
 
 class USBInterface(HardwareInterface):
-    """USB-to-Serial interface, which may be a direct link to one stage or a
-    hub to many. If an address is specified when sending, then the device
+    """Generic USB-to-Serial interface, which may be a direct link to one stage
+    or a hub to many. If an address is specified when sending, then the device
     acts as a hub and selects that device first.
     """
 
@@ -71,8 +72,8 @@ class USBInterface(HardwareInterface):
 
         .. code-block:: python
 
-            interface = USBInterface('COM4')  # take the default baud rate.
-            interface = USBInterface('COM4', 115200)
+            interface = USBInterface('COM4')  # take the default baud rate
+            interface = USBInterface('COM4', 115200)  # take a custom baud rate
 
             from serial import Serial
             ser = Serial('COM4', baud_rate=250000)
@@ -94,7 +95,8 @@ class USBInterface(HardwareInterface):
         :param address: Address of the stage to communicate with. Optional.
             If specified, the interface will issue additional commands to
             select the device first. If unspecified, the command will be sent
-            as-is. (This is useful to talk to the interface directly.)
+            as-is. (This is useful to send raw commands to talk to the
+            interface directly.)
         """
         if address is not None:
             if self.last_address != address:
@@ -117,13 +119,55 @@ class USBInterface(HardwareInterface):
         self.ser.write(out_msg)
 
     def read(self, address: str = None):
+        """Read a reply (up to the ``'\\r'`` character) and return it.
+
+        :param address: the device address to read from. For this interface
+            this parameter is only for ensuring that we read from the same
+            value immediately after writing to it such that we collect the
+            correct response.
+        """
+        data = self.ser.read_until(b'\r').decode('utf8')
+        # Warn if the data is supposed to go to a different stage.
         if address is not None:
             if self.last_address != address:
-                self._select_stage(address)
-        data = self.ser.read_until(b'\r').decode('utf8')
+                self.log.warning("Requesting to read the reply from a stage "
+                                 f"at address {address}, which is different "
+                                 f"from the last stage at address "
+                                 f"{self.last_address} that we issued a "
+                                 "command to.")
         address_msg = f"On address: '{address}', r" if address else "R"
         self.log.debug(f"{address_msg}ead back {repr(data)}")
         return data
+
+
+class M3USBInterface(USBInterface):
+    """A Newscale M3-style USB-to-Serial interface, which supports additional
+    commands beyond the generic USB-to-Serial interface."""
+
+    def set_baud_rate(self, baud_rate: int):
+        """Set the transceiver baud rate from the options available.
+
+        `Warning`: Newscale's Pathway Software expects a transceiver baud rate
+        of 250000.
+
+        :param: the baud rate to set as an integer.
+        """
+        assert baud_rate in BaudRateCode, \
+            "Requested input baud rate is invalid."
+        baud_rate_code = BaudRateCode[baud_rate]
+        msg = f"{TRANSCEIVER_PREFIX}<{Cmd.BAUD_RATE} 1 {baud_rate_code}>\r"
+        self.send(msg)
+        self.read()  # Discard the reply.
+
+    def get_baud_rate(self):
+        """get the Transceiver's communication baud rate.
+
+        :return: the stage's baud rate as an integer
+        """
+        msg = f"{TRANSCEIVER_PREFIX}<{Cmd.BAUD_RATE} 1>\r"
+        self.send(msg)
+        _, _, br_code = parse_tr_reply(self.read())
+        return BaudRateCode.inverse[f"{br_code:02x}"]
 
 
 class PoEInterface(HardwareInterface):

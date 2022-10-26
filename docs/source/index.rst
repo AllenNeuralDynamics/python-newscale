@@ -16,20 +16,14 @@ Welcome to Python-Newscale's documentation!
 .. autoclass:: newscale.stages.USBXYZStage
     :members:
     :member-order: bysource
+    :inherited-members:
 
-.. autoclass:: newscale.interfaces.USBInterface
+.. autoclass:: newscale.interfaces.M3USBInterface
     :members:
     :member-order: bysource
-
-.. autoclass:: newscale.interfaces.PoEInterface
-    :members:
-    :member-order: bysource
+    :inherited-members:
 
 .. autoclass:: newscale.device_codes.StageCmd
-    :members:
-    :member-order: bysource
-
-.. autoclass:: newscale.device_codes.TransceiverCmd
     :members:
     :member-order: bysource
 
