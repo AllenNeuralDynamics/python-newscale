@@ -11,7 +11,7 @@ from newscale.interfaces import HardwareInterface, USBInterface, \
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 from serial import Serial
 from time import perf_counter, sleep
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 
 # Constants
@@ -27,7 +27,9 @@ class M3LinearSmartStage:
     INTERVAL = 1000.  # us. Fixed value for speed calculations.
 
     def __init__(self, interface: HardwareInterface, address: str = None):
-        """Create hardware interface if unspecified or use an existing one.
+        """Connect to a stage through a hardware interface.
+        Establish computer control and put the stage in closed loop drive mode.
+        Create hardware interface if unspecified or use an existing one.
 
         :param interface: interface object through which to communicate.
         :param address: address to communicate to the device on the specified
@@ -102,6 +104,7 @@ class M3LinearSmartStage:
         establishing computer control. To release computer control, issue a
         :meth:`close` or create the object inside a ``with`` statement.
 
+        :return: the firmware version encoded as a string.
         """
         return self._send(self._get_cmd_str(Cmd.FIRMWARE_VERSION))[-1]
 
@@ -117,6 +120,8 @@ class M3LinearSmartStage:
     # <04>
     def run(self, direction: Direction, seconds: float = None):
         """Enable motor for a specified time or without limit if unspecified.
+        Speed/accel settings depend on what drive mode the stage is set to,
+        which can be changed with :meth:`set_drive_mode`.
 
         :param direction: which direction to run:
             :attr:`~newscale.device_codes.Direction.FORWARD` or
@@ -230,6 +235,8 @@ class M3LinearSmartStage:
     # <08>
     def move_to_target(self, setpoint_mm: float = None):
         """Move to the target absolute setpoint specified in mm.
+        The stage's drive mode must first be set to closed loop mode first via
+        :meth:`set_drive_mode`.
 
         :param setpoint_mm:  positive or negative setpoint.
         """
@@ -333,7 +340,19 @@ class M3LinearSmartStage:
 
     # <20>
     def set_drive_mode(self, drive_mode: DriveMode):
-        """Set open or closed-loop mode."""
+        """Set open or closed-loop mode.
+
+        :param drive_mode: drive mode specified as
+            :attr:`~newscale.device_codes.DriveMode.OPEN_LOOP` or
+            :attr:`~newscale.device_codes.DriveMode.CLOSED_LOOP`.
+
+        .. code-block:: python
+
+            from newscale.device_codes import DriveMode
+
+            stage.set_drive_mode(DriveMode.CLOSED_LOOP)
+
+        """
         return self._send(self._get_cmd_str(Cmd.DRIVE_MODE, drive_mode.value))
 
     # <20> variant
@@ -345,20 +364,20 @@ class M3LinearSmartStage:
 
     # <40>
     def set_closed_loop_speed_and_accel(self, vel_mm_per_second: float,
-                                        accel_mm_per_squared_second: float,
+                                        accel_mm_per_sq_second: float,
                                         min_vel_mm_per_second: float = 0.02):
         """Set the closed loop speed and accel in mm/sec and mm/(sec^2)
         respectively.
 
         :param vel_mm_per_second: speed in mm/sec.
-        :param accel_mm_per_squared_second: acceleration in mm/sec^2 .
+        :param accel_mm_per_sq_second: acceleration in mm/sec^2 .
         :param min_vel_mm_per_second: minimum velocity in mm/sec. (Optional).
         """
         assert vel_mm_per_second > min_vel_mm_per_second, \
             "Error: requested velocity must be faster than the minimum" \
             f"velocity: {min_vel_mm_per_second} [m/sec]."
         um_per_second = vel_mm_per_second * 1.0e3
-        um_per_squared_second = accel_mm_per_squared_second * 1.0e3
+        um_per_squared_second = accel_mm_per_sq_second * 1.0e3
         cutoff_vel_um_per_sec = min_vel_mm_per_second * 1e3
         # Scheme for converting to register values comes from the datasheet.
         INTERVAL_COUNT = 1
@@ -391,7 +410,7 @@ class M3LinearSmartStage:
                               f"{interval_duration_intervals:04x}"))
 
     # <40> variant
-    def get_closed_loop_speed_settings(self):
+    def get_closed_loop_speed_and_accel(self):
         """Get closed loop speed and acceleration settings.
 
         :return: a 4-tuple of ``(<speed in [mm/s]>,
@@ -421,11 +440,11 @@ class M3LinearSmartStage:
                accel_mm_per_sq_second, interval_count
 
     # <46>
-    def set_soft_limit_values(self, min_limit_mm, max_limit_mm):
+    def set_soft_limit_values(self, min_limit_mm: float, max_limit_mm: float):
         """Set the soft limit values in mm.
 
-        Note: soft limits needs to be enabled for these values to have any
-            effect.
+        Note: soft limits needs to be enabled via :meth:`enable_soft_limits`
+        for these values to have any effect.
 
         :param min_limit_mm: The minimum limit in [mm].
         :param max_limit_mm: The maximum limit in [mm].
@@ -448,7 +467,7 @@ class M3LinearSmartStage:
                                             f"{max_value:08x}"))
 
     # <47> Enable/Disable soft limits.
-    def set_soft_limit_state(self, soft_limits_enabled: bool):
+    def _set_soft_limit_state(self, soft_limits_enabled: bool):
         """Enable or disable soft limits.
 
         :param soft_limits_enabled: True to enable soft limits. False to
@@ -459,10 +478,16 @@ class M3LinearSmartStage:
 
     # <47> variant
     def enable_soft_limits(self):
+        """Enable software-based stage travel limits.
+        These values can be set with :meth:`set_soft_limit_values`.
+        """
         self.set_soft_limit_state(True)
 
     # <47> variant
     def disable_soft_limits(self):
+        """Disable software-based stage travel limits.
+        These values can be set with :meth:`set_soft_limit_values`.
+        """
         self.set_soft_limit_state(False)
 
     # <52>
@@ -497,9 +522,10 @@ def axis_check(*args_to_skip: str):
             # Sanitize input to all-lowercase.
             args = [a.lower() for a in args]
             kwargs = {k.lower(): v for k, v in kwargs.items()}
-            # Combine args and kwarg names; skip double-adding params specified as
-            # one or the other.
-            iterable = [a for a in args if a not in kwargs] + list(kwargs.keys())
+            # Combine args and kwarg names; skip double-adding params specified
+            # as one or the other.
+            iterable = [a for a in args if a not in kwargs] + \
+                       list(kwargs.keys())
             for arg in iterable:
                 # Skip pre-specified args.
                 if arg in args_to_skip:
@@ -537,40 +563,35 @@ class MultiStage:
         self.stages = {k.lower(): v for k, v in stages.items()}
 
     @axis_check()
-    def set_drive_mode(self, **axes: DriveMode):
+    def _set_drive_mode(self, drive_mode: DriveMode):
         """Set the specified axes to the specified modes.
 
-        :param axes: one or more axes specified by name with their drive mode
-            specified as a DriveMode.
-
-        .. code-block:: python
-
-            stages.set_drive_mode(x=DriveMode.CLOSED_LOOP)
-
+        :param drive_mode: drive mode specified as
+            :attr:`~newscale.device_codes.DriveMode.OPEN_LOOP` or
+            :attr:`~newscale.device_codes.DriveMode.CLOSED_LOOP`.
         """
-        for axis_name, drive_mode in axes.items():
-            self.stages[axis_name].set_drive_mode(drive_mode)
+        for _, axis in self.stages.items():
+            axis.set_drive_mode(drive_mode)
 
     def set_open_loop_mode(self):
         """Put all axes in open loop mode."""
         axes_dict = {x: DriveMode.OPEN_LOOP for x in self.stages.keys()}
-        self.set_drive_mode(**axes_dict)
+        self._set_drive_mode(**axes_dict)
 
     def set_closed_loop_mode(self):
-        """Put all axes in closed loop mode.
-
-        Note: issuing absolute moves requires that the stage first be in
-        closed loop mode.
-        """
+        """Put all axes in closed loop mode."""
         axes_dict = {x: DriveMode.CLOSED_LOOP for x in self.stages.keys()}
-        self.set_drive_mode(**axes_dict)
+        self._set_drive_mode(**axes_dict)
 
     @axis_check('wait')
     def move_absolute(self, wait: bool = True, **axes: float):
         """Move the specified axes by the specified amounts.
 
-        Note: the multistage will NOT travel in a straight line to its
-            destination unless accelerations and speeds are set to do so.
+        Note: the multistage will `not` travel in a straight line to its
+        destination unless accelerations and speeds are set to do so.
+
+        Note: issuing absolute moves requires that the stage first be in
+        closed loop mode.
 
         :param wait: bool indicating if this function should block until the
             stage has reached its destination.
@@ -597,12 +618,16 @@ class MultiStage:
 
     @axis_check('wait')
     def move_for_time(self, wait: bool = True,
-                      **axes: Tuple[Direction, Tuple[float, None]]):
+                      **axes: Tuple[Direction, Optional[float]]):
         """Move axes specified for the corresponding amount of time in seconds.
+
+        Note: the multistage will `not` travel in a straight line to its
+            destination unless accelerations and speeds are set to do so.
 
         :param wait: bool indicating if this function should block until the
             stage has reached its destination.
-        :param axes: a per-axis tuple of (Direction, <move_time_in_seconds>).
+        :param axes: a per-axis tuple of
+            ``(Direction, <move_time_in_seconds>)``.
             the move time can be set to None, and the axis will run until
             reaching a limit or being issued a halt.
         """
@@ -627,31 +652,99 @@ class MultiStage:
 
     @axis_check()
     def get_position(self, *axes: str):
-        """Retrieve the specified axes positions (in mm) as a dict, or get all
-        positions if none are specified.
+        """Retrieve the specified axes positions (in mm) as a dict.
 
         :param axes: an unlimited number of axes specified by name (string).
 
         .. code-block:: python
 
             stages.get_position('x', 'y', 'z')  # Get specified positions OR
-            stages.get_position()  # Get all positions.
 
         """
-        if len(axes) == 0:  # return all axes if None are specified.
-            axes = self.stages.keys()
         return {x: self.stages[x].get_position() for x in axes}
 
-    @axis_check()
-    def set_speed(self, **axes):
-        """Set the speeds of the specified axes in mm/sec."""
-        # TODO: Units
-        pass
+    @axis_check('global_speed')
+    def set_open_loop_speed(self, global_speed: float = None, **axes: float):
+        """Set the speeds of the specified axes (or all) as a percent.
 
-    def get_speed(self, **axes):
-        """Get the speeds of the specified axes"""
-        # TODO: Units
-        pass
+
+        :param global_speed: the speed to set all axes
+        :param axes: the speed to set to the specified axes.
+
+         .. code-block:: python
+
+            stages.set_open_loop_speed(50.)  # Set all axes to 50% speed.
+            stages.set_open_loop_speed(x=50., y=100.)  # Set x axis to 50%; y axis to 100%.
+
+        """
+        if global_speed is not None:
+            for _, axis in self.stages.items():
+                axis.set_open_loop_speed(global_speed)
+        else:
+            for axis_name, speed in axes.items():
+                self.stages[axis_name].set_open_loop_speed(speed)
+
+    @axis_check()
+    def get_open_loop_speed(self, *axes: str):
+        """Get the speeds of the specified axes as a percent.
+
+        :return: a dict, keyed by axis, of the speed setting per axis.
+
+        .. code-block:: python
+
+            stages.get_open_loop_speed('x', 'z')
+
+        """
+        return {x: self.stages[x].get_open_loop_speed() for x in axes}
+
+    @axis_check('global_setting')
+    def set_closed_loop_speed_and_accel(self,
+        global_setting: Tuple[float, float, Optional[int]] = None,
+        **axes: Tuple[float, float, Optional[int]]):
+        """Set the speed and accel settings of the specified axes (or all)
+        as a tuple.
+
+        :param global_setting: Optional. If specified, the settings will apply
+            to all axes. a 2-or-3-tuple of
+            ``(<speed in [mm/s]>, <accel in [mm/s^2]>,
+            <min speed in [mm/s]>)``.
+            Note that ``min speed`` is optional.
+        :param axes: a per-axis 2-or-3-tuple of
+            ``(<speed in [mm/s]>, <accel in [mm/s^2]>,
+            <min speed in [mm/s]>)``.  Note that ``min speed`` is optional.
+
+        .. code-block:: python
+
+            # Set all stage speed/accel values as such:
+            stages.set_closed_loop_speed_and_accel((10, 100))
+            # Set unique values per stage:
+            stages.set_closed_loop_speed_and_accel(x=(10, 100),
+                                                   y=(10, 100, 0.1)) # specify a min speed for y.
+
+        """
+        if global_setting is not None:
+            for _, axis in self.stages.items():
+                axis.set_set_closed_loop_speed_and_accel(*global_setting)
+        else:
+            for name, settings in axes.items():
+                self.stages[name].set_closed_loop_speed_and_accel(*settings)
+
+    @axis_check()
+    def get_closed_loop_speed_and_accel(self, *axes):
+        """Get the speed and accel settings of the specified axes in a dict.
+
+        :return: a dict of 4-tuples, keyed by axis, of the settings per
+            specified axis. 4-tuples contain: ``(<speed in [mm/s]>,
+            <minimum speed in [mm/s]>, <acceleration in [mm/s^2]>,
+            <interval count>)``
+
+        .. code-block:: python
+
+            stages.get_closed_loop_speed_and_accel('x', 'y', 'z')
+
+        """
+        return {x: self.stages[x].get_closed_loop_speed_and_accel()
+                for x in axes}
 
     @axis_check()
     def halt(self):
@@ -659,14 +752,36 @@ class MultiStage:
         return {x: self.stages[x].halt() for x in self.stages.keys()}
 
     @axis_check()
-    def set_soft_limit_states(self, **axes):
-        """set the state of the soft limits."""
-        # FIXME: implement this.
-        pass
+    def set_soft_limits(self, **axes):
+        """set the soft limits per axis.
+
+        :param: dict, keyed by axis, of 2-tuples representing
+            ``(<min limit>, <max limit>)`` in [mm].
+
+        .. code-block:: python
+
+            stages.set_soft_limits(x=(-0.25, 9.75), y=(0, 3.0))
+
+        """
+        for axis_name, (min_limit, max_limit) in axes.items():
+            self.stages[axis_name].set_soft_limits(min_limit, max_limit)
+
+    def enable_soft_limits(self):
+        """Enable software travel limits on all axes."""
+        for _, axis in self.stages.items():
+            axis.enable_soft_limits()
+
+    def disable_soft_limits(self):
+        """Disable software travel limits on all axes."""
+        for _, axis in self.stages.items():
+            axis.disable_soft_limits()
 
     def close(self):
         """Release computer control of all axes."""
         return {x: self.stages[x].close() for x in self.stages.keys()}
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
 
 
 class USBXYZStage(MultiStage):
