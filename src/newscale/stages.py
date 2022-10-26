@@ -1,16 +1,14 @@
 """Interface-agnostic classes to create manipulator cmds and interpret replies."""
 
 import logging
-from bitstring import BitArray  # for unpacking
 from functools import wraps
 from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
     parse_stage_reply
 from newscale.device_codes import StageCmd as Cmd, BaudRateCode
 from newscale.interfaces import HardwareInterface, USBInterface
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
-from serial import Serial
 from time import perf_counter, sleep
-from typing import Tuple, Union, Optional
+from typing import Tuple, Optional
 
 
 # Constants
@@ -21,7 +19,7 @@ TICKS_PER_MM = TICKS_PER_UM * 1000.
 class M3LinearSmartStage:
     """A single axis stage connected to the specified interface."""
 
-    #Constants
+    # Constants
     ENC_RES_NM = 500.  # nanometers. Fixed value for speed calculations.
     INTERVAL = 1000.  # us. Fixed value for speed calculations.
 
