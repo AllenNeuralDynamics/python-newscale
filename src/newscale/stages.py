@@ -6,8 +6,7 @@ from functools import wraps
 from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
     parse_stage_reply
 from newscale.device_codes import StageCmd as Cmd, BaudRateCode
-from newscale.interfaces import HardwareInterface, USBInterface, \
-    PoEInterface
+from newscale.interfaces import HardwareInterface, USBInterface
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 from serial import Serial
 from time import perf_counter, sleep
@@ -882,24 +881,6 @@ class USBXYZStage(MultiStage):
         self.interface = usb_interface if usb_interface and not port \
             else USBInterface(port, baud_rate)
         # Create 3 stages with corresponding addresses.
-        stages = {'x': M3LinearSmartStage(self.interface, '01'),
-                  'y': M3LinearSmartStage(self.interface, '02'),
-                  'z': M3LinearSmartStage(self.interface, '03')}
-        super().__init__(**stages)
-
-
-class PoEXYZStage(MultiStage):
-    """An XYZ Stage from a single Power-over-Ethernet interface."""
-
-    def __init__(self, address: str = None,
-                 socket_interface: PoEInterface = None):
-        if not ((address is None) ^ (socket_interface is None)):
-            raise SyntaxError("Exclusively either address or socket_interface"
-                              "(i.e: one or the other, but not both) options "
-                              "must be specified.")
-        self.interface = socket_interface if socket_interface and not address \
-            else PoEInterface(address)
-        # Create 3 stages.
         stages = {'x': M3LinearSmartStage(self.interface, '01'),
                   'y': M3LinearSmartStage(self.interface, '02'),
                   'z': M3LinearSmartStage(self.interface, '03')}
