@@ -231,7 +231,7 @@ class M3LinearSmartStage:
         self._send(self._get_cmd_str(Cmd.CLEAR_ENCODER_COUNT))
 
     # <08>
-    def move_to_target(self, setpoint_mm: float = None):
+    def move_to_target(self, setpoint_mm: float):
         """Move to the target absolute setpoint specified in mm.
         The stage's drive mode must first be set to closed loop mode first via
         :meth:`set_drive_mode`.
@@ -241,8 +241,6 @@ class M3LinearSmartStage:
 
         :param setpoint_mm:  positive or negative setpoint.
         """
-        if setpoint_mm is None:
-            return self._get_cmd_str(Cmd.MOVE_TO_TARGET)
         setpoint_ticks = round(setpoint_mm*TICKS_PER_MM)
         # Check that requested values will fit in register representation.
         # Note: We can't use bit_length() for signed numbers.
@@ -255,6 +253,15 @@ class M3LinearSmartStage:
         setpoint_ticks = setpoint_ticks & 0xFFFFFFFF
         self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET,
                                      f"{setpoint_ticks:08x}"))
+
+    # <08> variant
+    def get_target_position(self):
+        """get the current closed loop target position.
+
+        :returns: target position in [mm]
+        """
+        return self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET))[1]\
+               / TICKS_PER_MM
 
     # <09>
     def set_open_loop_speed(self, percent: float):
