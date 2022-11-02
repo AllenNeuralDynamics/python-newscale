@@ -387,7 +387,7 @@ class M3LinearSmartStage:
         :param min_vel_um_per_second: minimum velocity in [um/s]. (Optional).
         :param interval_count: interval duration in number of intervals.
             (Optional). (Don't change this unless you really know what you're
-            doing!
+            doing!)
         """
         assert vel_um_per_second > min_vel_um_per_second, \
             "Error: requested velocity must be faster than the minimum " \
