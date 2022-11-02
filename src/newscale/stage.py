@@ -181,22 +181,22 @@ class M3LinearSmartStage:
 
     # <06>
     def _distance_step(self, direction: Direction = Direction.NEITHER,
-                      step_size_mm: float = None):
+                       step_size_um: float = None):
         """Take a step of size ``step_size`` in the specified direction.
         If no step size is specified, the previous step size will be used.
         If :attr:`~newscale.device_codes.Direction.NEITHER` is specified
-        as the ``direction``, then ``step_size_mm`` is not optional and will
+        as the ``direction``, then ``step_size_um`` is not optional and will
         save the step size.
 
         :param direction: direction to step in.
             :attr:`~newscale.device_codes.Direction.NEITHER` is also
             acceptable, in which case the step size will be saved as default.
-        :param step_size_mm: the size of the step. Optional.
+        :param step_size_um: the size of the step. Optional.
         """
-        step_size_ticks = round(step_size_mm*TICKS_PER_MM)  # 32 bit unsigned.
+        step_size_ticks = round(step_size_um*TICKS_PER_UM)  # 32 bit unsigned.
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
         # Save whether we have ever configured a step size before.
-        if step_size_mm is not None:
+        if step_size_um is not None:
             self.step_size_specified = True
         if not self.step_size_specified:
             self.log.warning("Distance step step size was never specified.")
@@ -204,12 +204,12 @@ class M3LinearSmartStage:
                                      f"{step_size_ticks:08x}"))
 
     # <06> variant
-    def set_distance_step_size(self, step_size_mm: float):
+    def set_distance_step_size(self, step_size_um: float):
         """Specify the step size taken (in mm) in :meth:`step`
 
-        :param step_size_mm: the size of the step. Optional.
+        :param step_size_um: the size of the step. Optional.
         """
-        self._distance_step(Direction.NEITHER, step_size_mm)
+        self._distance_step(Direction.NEITHER, step_size_um)
 
     # <06> variant
     def step(self, direction: Direction):
@@ -228,7 +228,7 @@ class M3LinearSmartStage:
         self._send(self._get_cmd_str(Cmd.CLEAR_ENCODER_COUNT))
 
     # <08>
-    def move_to_target(self, setpoint_mm: float):
+    def move_to_target(self, setpoint_um: float):
         """Move to the target absolute setpoint specified in mm.
         The stage's drive mode must first be set to closed loop mode first via
         :meth:`set_drive_mode`.
@@ -236,9 +236,9 @@ class M3LinearSmartStage:
         Note: On instantiation, the stage is put in
         :attr:`~newscale.device_codes.DriveMode.CLOSED_LOOP` mode.
 
-        :param setpoint_mm:  positive or negative setpoint.
+        :param setpoint_um:  positive or negative setpoint.
         """
-        setpoint_ticks = round(setpoint_mm*TICKS_PER_MM)
+        setpoint_ticks = round(setpoint_um*TICKS_PER_UM)
         # Check that requested values will fit in register representation.
         # Note: We can't use bit_length() for signed numbers.
         assert -0x80000000 <= setpoint_ticks <= 0x7FFFFFFF, \
@@ -255,10 +255,10 @@ class M3LinearSmartStage:
     def get_target_position(self):
         """get the current closed loop target position.
 
-        :returns: target position in [mm]
+        :return: target position in [um]
         """
         return self._send(self._get_cmd_str(Cmd.MOVE_TO_TARGET))[1]\
-               / TICKS_PER_MM
+               / TICKS_PER_UM
 
     # <09>
     def set_open_loop_speed(self, percent: float):
@@ -286,21 +286,21 @@ class M3LinearSmartStage:
         """Return a 3-tuple of (state as a dict, position in mm, error in mm).
 
         :return: a 3-tuple of
-            ``(<state in dict>, <position in mm>, <position error in mm>)``
+            ``(<state in dict>, <position in [um]>, <position error in [um]>)``
         """
         # use get_state
         _, state_int, pos, error = \
             self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
-        return self._parse_state(state_int), pos/TICKS_PER_MM, \
-               error/TICKS_PER_MM
+        return self._parse_state(state_int), pos/TICKS_PER_UM, \
+               error/TICKS_PER_UM
 
     # <10> variant
     def get_position(self):
         """
-        :return: the position of this stage in [mm].
+        :return: the position of this stage in [um].
         """
         _, _, pos, _ = self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_STATE))
-        return pos/TICKS_PER_MM
+        return pos/TICKS_PER_UM
 
     @staticmethod
     def _parse_state(state: int):
@@ -375,36 +375,38 @@ class M3LinearSmartStage:
         return DriveMode(f"{mode:x}")
 
     # <40>
-    def set_closed_loop_speed_and_accel(self, vel_mm_per_second: float,
-                                        accel_mm_per_sq_second: float,
-                                        min_vel_mm_per_second: float = 0.02):
+    def set_closed_loop_speed_and_accel(self, vel_um_per_second: float,
+                                        accel_um_per_sq_second: float,
+                                        min_vel_um_per_second: float = 20,
+                                        interval_count: int = 1):
         """Set the closed loop speed and accel in mm/sec and mm/(sec^2)
         respectively.
 
-        :param vel_mm_per_second: speed in mm/sec.
-        :param accel_mm_per_sq_second: acceleration in mm/sec^2 .
-        :param min_vel_mm_per_second: minimum velocity in mm/sec. (Optional).
+        :param vel_um_per_second: speed in [um/s].
+        :param accel_um_per_sq_second: acceleration in [um/s^2] .
+        :param min_vel_um_per_second: minimum velocity in [um/s]. (Optional).
+        :param interval_count: interval duration in number of intervals.
+            (Optional). (Don't change this unless you really know what you're
+            doing!
         """
-        assert vel_mm_per_second > min_vel_mm_per_second, \
-            "Error: requested velocity must be faster than the minimum" \
-            f"velocity: {min_vel_mm_per_second} [m/sec]."
-        um_per_second = vel_mm_per_second * 1.0e3
-        um_per_squared_second = accel_mm_per_sq_second * 1.0e3
-        cutoff_vel_um_per_sec = min_vel_mm_per_second * 1e3
-        # Scheme for converting to register values comes from the datasheet.
-        INTERVAL_COUNT = 1
+        assert vel_um_per_second > min_vel_um_per_second, \
+            "Error: requested velocity must be faster than the minimum " \
+            f"velocity: {min_vel_um_per_second} [um/s]."
+        um_per_second = vel_um_per_second
+        um_per_squared_second = accel_um_per_sq_second
+        cutoff_vel_um_per_sec = min_vel_um_per_second
 
         vel_counts_per_interval = \
             round((um_per_second/(self.__class__.ENC_RES_NM/1000.)) * 256
-                  * (INTERVAL_COUNT*(self.__class__.INTERVAL/1.0e6)))
+                  * (interval_count*(self.__class__.INTERVAL/1.0e6)))
         cutoff_vel_counts_per_interval = \
             round(cutoff_vel_um_per_sec/(self.__class__.ENC_RES_NM/1e3) * 256
-                  * (INTERVAL_COUNT * (self.__class__.INTERVAL/1e6)))
+                  * (interval_count * (self.__class__.INTERVAL/1e6)))
         accel_counts_per_sq_interval = \
             round(vel_counts_per_interval
                   / (um_per_second/um_per_squared_second)
-                  * INTERVAL_COUNT * (self.__class__.INTERVAL/1e6))
-        interval_duration_intervals = INTERVAL_COUNT
+                  * interval_count * (self.__class__.INTERVAL/1e6))
+        interval_duration_intervals = interval_count
 
         # Check the size of values as they would appear on the register.
         assert len(bin(vel_counts_per_interval)[2:]) <= 24, \
@@ -424,8 +426,8 @@ class M3LinearSmartStage:
     def get_closed_loop_speed_and_accel(self):
         """Get closed loop speed and acceleration settings.
 
-        :return: a 4-tuple of ``(<speed in [mm/s]>,
-            <minimum speed in [mm/s]>, <acceleration in [mm/s^2]>,
+        :return: a size-4 list of ``[<speed in [um/s]>,
+            <acceleration in [um/s^2]>, <minimum speed in [um/s]>,
             <interval count>)``
         """
         # Note that conversion equations come from datasheet.
@@ -433,43 +435,44 @@ class M3LinearSmartStage:
         accel_counts_per_sq_interval, interval_count = \
             self._send(self._get_cmd_str(Cmd.CLOSED_LOOP_SPEED))
         # Helper value.
-        counts_per_interval_to_mm_per_sec = \
+        counts_per_interval_to_um_per_sec = \
             (self.__class__.ENC_RES_NM*1.0e6) \
-            / (1.0e3*256*interval_count*self.__class__.INTERVAL*1.0e3)
+            / (1.0e3*256*interval_count*self.__class__.INTERVAL)
         #  Convert raw register values to have familiar units where possible.
-        vel_mm_per_second = \
-            vel_counts_per_interval * counts_per_interval_to_mm_per_sec
-        min_vel_mm_per_second = \
-            min_vel_counts_per_interval * counts_per_interval_to_mm_per_sec
+        vel_um_per_second = \
+            vel_counts_per_interval * counts_per_interval_to_um_per_sec
+        min_vel_um_per_second = \
+            min_vel_counts_per_interval * counts_per_interval_to_um_per_sec
         # accel value depends on raw velocity and accel regsiters AND
         # velocity computed in um/sec.
         accel_um_per_sq_second = \
-            (vel_mm_per_second*1000*accel_counts_per_sq_interval*1e6) \
+            (vel_um_per_second*accel_counts_per_sq_interval*1e6) \
             / (vel_counts_per_interval*interval_count*self.__class__.INTERVAL)
-        accel_mm_per_sq_second = accel_um_per_sq_second/1000.
-        return vel_mm_per_second, min_vel_mm_per_second, \
-               accel_mm_per_sq_second, interval_count
+        return [vel_um_per_second, accel_um_per_sq_second,
+                min_vel_um_per_second, interval_count]
 
     # <46>
-    def set_soft_limits(self, min_limit_mm: float, max_limit_mm: float,
-                        margin_mm: float = 0):
-        """Set the soft limit values in mm.
+    def set_soft_limits(self, min_limit_um: float, max_limit_um: float,
+                        margin_um: float = 0):
+        """Set the soft limit values in um.
 
         Note: soft limits needs to be enabled via :meth:`enable_soft_limits`
         for these values to have any effect.
 
-        :param min_limit_mm: The minimum limit in [mm].
-        :param max_limit_mm: The maximum limit in [mm].
-        :param margin_mm: The distance in DriveMode[mm] before each limit where
+        :param min_limit_um: The minimum limit in [um] (aka: the "reverse
+            limit").
+        :param max_limit_um: The maximum limit in [um] (aka: the "forward
+            limit").
+        :param margin_um: The distance in [um] before each limit where
             the :attr:`~newscale.device_codes.StateBit.FORWARD_LIMIT_REACHED`
             or :attr:`~newscale.device_codes.StateBit.REVERSE_LIMIT_REACHED`
             :obj:`~newscale.device_codes.StateBit` flags will remain active
             after the limit has been tripped (aka: hysteresis).
         """
         # Convert to encoder counts.
-        min_value = round(min_limit_mm * 1e6 / self.__class__.ENC_RES_NM)
-        max_value = round(max_limit_mm * 1e6 / self.__class__.ENC_RES_NM)
-        margin_value = round(margin_mm * 1e6 / self.__class__.ENC_RES_NM)
+        min_value = round(min_limit_um * 1e3 / self.__class__.ENC_RES_NM)
+        max_value = round(max_limit_um * 1e3 / self.__class__.ENC_RES_NM)
+        margin_value = round(margin_um * 1e3 / self.__class__.ENC_RES_NM)
         # Check that requested values will fit in register representation.
         # Note: We can't use bit_length() for signed numbers.
         assert -0x80000000 <= min_value <= 0x7FFFFFFF, "Error, requested " \
@@ -484,7 +487,7 @@ class M3LinearSmartStage:
         min_value = min_value & 0xFFFFFFFF  # Force 32 bit size, two's comp.
         max_value = max_value & 0xFFFFFFFF
         self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES,
-                                     f"{min_value:08x}", f"{max_value:08x}",
+                                     f"{max_value:08x}", f"{min_value:08x}",
                                      f"{margin_value:04x}"))
 
     # <46> variant
@@ -492,14 +495,18 @@ class M3LinearSmartStage:
         """Get the soft travel limit minimum, maximum, and error margin.
 
         :return: 3-Tuple of
-            ``<min limit [mm]>, <max limit [mm]>, <error margin [mm]>)`` where
+            ``<min limit [um]>, <max limit [um]>, <error margin [um]>)`` where
             the error margin represents a value before the limit where the
             :attr:`~newscale.device_codes.StateBit.FORWARD_LIMIT_REACHED` or
             :attr:`~newscale.device_codes.StateBit.REVERSE_LIMIT_REACHED`
             :obj:`~newscale.device_codes.StateBit` flags will remain active
             after the limit has been tripped (aka: hysteresis).
         """
-        return self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES))[1:]
+        max_limit_reg, min_limit_reg, error_reg = \
+            self._send(self._get_cmd_str(Cmd.SOFT_LIMIT_VALUES))[1:]
+        return min_limit_reg * self.__class__.ENC_RES_NM / 1.e3, \
+               max_limit_reg * self.__class__.ENC_RES_NM / 1.e3, \
+               error_reg * self.__class__.ENC_RES_NM / 1.e3
 
     # <47> Enable/Disable soft limits.
     def _set_soft_limit_state(self, soft_limits_enabled: bool):
@@ -516,14 +523,14 @@ class M3LinearSmartStage:
         """Enable software-based stage travel limits.
         These values can be set with :meth:`set_soft_limit_values`.
         """
-        self.set_soft_limit_state(True)
+        self._set_soft_limit_state(True)
 
     # <47> variant
     def disable_soft_limits(self):
         """Disable software-based stage travel limits.
         These values can be set with :meth:`set_soft_limit_values`.
         """
-        self.set_soft_limit_state(False)
+        self._set_soft_limit_state(False)
 
     # <52>
     def get_time_interval_units(self):

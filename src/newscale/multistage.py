@@ -247,9 +247,9 @@ class MultiStage:
         """Get the speed and accel settings of the specified axes (or all
         if none are specifed) as a dict.
 
-        :return: a dict of 4-tuples, keyed by axis, of the settings per
-            specified axis. 4-tuples contain: ``(<speed in [mm/s]>,
-            <minimum speed in [mm/s]>, <acceleration in [mm/s^2]>,
+        :return: a dict of size-4 lists, keyed by axis, of the settings per
+            specified axis. Lists contain: ``(<speed in [mm/s]>,
+            <acceleration in [mm/s^2]>, <minimum speed in [mm/s]>,
             <interval count>)``
 
         .. code-block:: python
