@@ -5,11 +5,11 @@ Welcome to Python-Newscale's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-.. autoclass:: newscale.stages.M3LinearSmartStage
+.. autoclass:: newscale.stage.M3LinearSmartStage
     :members:
     :member-order: bysource
 
-.. autoclass:: newscale.stages.USBXYZStage
+.. autoclass:: newscale.multistage.USBXYZStage
     :members:
     :member-order: bysource
     :inherited-members:

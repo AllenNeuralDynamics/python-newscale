@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from newscale.stages import M3LinearSmartStage
+from newscale.stage import M3LinearSmartStage
 from newscale.device_codes import Direction
-from newscale.interfaces import M3USBInterface, PoEInterface
+from newscale.interfaces import M3USBInterface
 from time import sleep
 import logging
 import pprint

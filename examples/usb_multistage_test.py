@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from newscale.stages import USBXYZStage
+from newscale.multistage import USBXYZStage
 from newscale.device_codes import Direction
 from random import uniform
 from time import sleep, perf_counter

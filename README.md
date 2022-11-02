@@ -20,7 +20,7 @@ pip install -e .
 ## Quickstart
 To connect to an XYZ stage over a USB interface, invoke:
 ```python
-from newscale.stages import USBXYZStage
+from newscale.multistage import USBXYZStage
 from newscale.device_codes import Direction
 
 stage = USBXYZStage('COM4')
