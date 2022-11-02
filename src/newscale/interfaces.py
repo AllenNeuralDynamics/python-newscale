@@ -1,10 +1,12 @@
 """Set of hardware interfaces through which we can communicate with stages."""
 
 import logging
-from newscale.device_codes import TransceiverCmd as Cmd
-from newscale.device_codes import TRANSCEIVER_PREFIX, parse_tr_reply, \
-    BaudRateCode
+
 from serial import Serial
+
+from newscale.device_codes import TRANSCEIVER_PREFIX, BaudRateCode
+from newscale.device_codes import TransceiverCmd as Cmd
+from newscale.device_codes import parse_tr_reply
 
 
 class HardwareInterface:

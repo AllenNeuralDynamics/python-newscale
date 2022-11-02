@@ -1,11 +1,12 @@
 """Collection of interface-agnostic device commands to get/set state."""
 
-from bitstring import BitArray
 from enum import Enum
+
 from bidict import bidict
+from bitstring import BitArray
 
 try:
-    from enum import StrEnum  # a 3.11 freature.
+    from enum import StrEnum  # a 3.11 feature.
 except ImportError:
     class StrEnum(str, Enum):
         pass

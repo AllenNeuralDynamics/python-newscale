@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-from newscale.stage import M3LinearSmartStage
-from newscale.device_codes import Direction
-from newscale.interfaces import M3USBInterface
-from time import sleep
 import logging
 import pprint
+from time import sleep
+
+from newscale.device_codes import Direction
+from newscale.interfaces import M3USBInterface
+from newscale.stage import M3LinearSmartStage
 
 # Uncomment for some prolific log statements.
 #logger = logging.getLogger()

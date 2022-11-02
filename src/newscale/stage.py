@@ -1,12 +1,12 @@
 """Interface-agnostic classes to create manipulator cmds and interpret replies."""
 
 import logging
-from newscale.device_codes import StateBit, Direction, Mode, DriveMode,\
-    parse_stage_reply
-from newscale.device_codes import StageCmd as Cmd, BaudRateCode
-from newscale.interfaces import HardwareInterface
-from newscale.errors import IllegalCommandError, IllegalCommandFormatError
 
+from newscale.device_codes import BaudRateCode, Direction, DriveMode, Mode
+from newscale.device_codes import StageCmd as Cmd
+from newscale.device_codes import StateBit, parse_stage_reply
+from newscale.errors import IllegalCommandError, IllegalCommandFormatError
+from newscale.interfaces import HardwareInterface
 
 # Constants
 TICKS_PER_UM = 2.0  # encoder ticks per micrometer.

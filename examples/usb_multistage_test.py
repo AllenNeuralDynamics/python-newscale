@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-from newscale.multistage import USBXYZStage
-from newscale.device_codes import Direction
-from random import uniform
-from time import sleep, perf_counter
 import pprint
+from random import uniform
+from time import perf_counter, sleep
+
+from newscale.device_codes import Direction
+from newscale.multistage import USBXYZStage
 
 # Uncomment for some prolific log statements.
 #import logging

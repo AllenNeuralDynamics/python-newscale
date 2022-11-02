@@ -2,12 +2,13 @@
 
 import logging
 from functools import wraps
-from newscale.stage import M3LinearSmartStage
-from newscale.device_codes import StateBit, Direction, Mode, DriveMode, \
-    parse_stage_reply
-from newscale.interfaces import USBInterface
-from typing import Tuple, Optional
 from time import perf_counter, sleep
+from typing import Optional, Tuple
+
+from newscale.device_codes import (Direction, DriveMode, Mode, StateBit,
+                                   parse_stage_reply)
+from newscale.interfaces import USBInterface
+from newscale.stage import M3LinearSmartStage
 
 
 # Decorators
