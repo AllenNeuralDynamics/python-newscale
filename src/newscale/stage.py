@@ -205,7 +205,7 @@ class M3LinearSmartStage:
 
     # <06> variant
     def set_distance_step_size(self, step_size_um: float):
-        """Specify the step size taken (in mm) in :meth:`step`
+        """Specify the step size taken (in um) in :meth:`step`
 
         :param step_size_um: the size of the step. Optional.
         """
@@ -229,7 +229,7 @@ class M3LinearSmartStage:
 
     # <08>
     def move_to_target(self, setpoint_um: float):
-        """Move to the target absolute setpoint specified in mm.
+        """Move to the target absolute setpoint specified in um.
         The stage's drive mode must first be set to closed loop mode first via
         :meth:`set_drive_mode`.
 
@@ -283,7 +283,7 @@ class M3LinearSmartStage:
 
     # <10>
     def get_closed_loop_state_and_position(self):
-        """Return a 3-tuple of (state as a dict, position in mm, error in mm).
+        """Return a 3-tuple of (state as a dict, position in um, error in um).
 
         :return: a 3-tuple of
             ``(<state in dict>, <position in [um]>, <position error in [um]>)``
@@ -379,7 +379,7 @@ class M3LinearSmartStage:
                                         accel_um_per_sq_second: float,
                                         min_vel_um_per_second: float = 20,
                                         interval_count: int = 1):
-        """Set the closed loop speed and accel in mm/sec and mm/(sec^2)
+        """Set the closed loop speed and accel in um/sec and um/(sec^2)
         respectively.
 
         :param vel_um_per_second: speed in [um/s].

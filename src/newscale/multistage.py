@@ -96,7 +96,7 @@ class MultiStage:
         :param wait: bool indicating if this function should block until the
             stage has reached its destination.
         :param axes: one or more axes specified by name with their move amount
-            specified in [mm].
+            specified in [um].
 
         .. code-block:: python
 
@@ -104,8 +104,8 @@ class MultiStage:
             stages.move_absolute(x=7.5, wait=False)  # move x only. Don't wait.
 
         """
-        for axis_name, abs_position_mm in axes.items():
-            self.stages[axis_name].move_to_target(abs_position_mm)
+        for axis_name, abs_position_um in axes.items():
+            self.stages[axis_name].move_to_target(abs_position_um)
         if not wait:
             return
         # Poll position vector until we have reached the target or timeout.
@@ -159,10 +159,10 @@ class MultiStage:
     @axis_check()
     def get_position(self, *axes: str):
         """Retrieve the specified axes positions (or all if none are specified)
-        in [mm] as a dict.
+        in [um] as a dict.
 
         :param axes: an unlimited number of axes specified by name (string).
-        :return: a dict, keyed by axis, of the position per axis in [mm].
+        :return: a dict, keyed by axis, of the position per axis in [um].
 
         .. code-block:: python
 
@@ -220,12 +220,12 @@ class MultiStage:
 
         :param global_setting: Optional. If specified, the settings will apply
             to all axes. a 2-or-3-tuple of
-            ``(<speed in [mm/s]>, <accel in [mm/s^2]>,
-            <min speed in [mm/s]>)``.
+            ``(<speed in [um/s]>, <accel in [um/s^2]>,
+            <min speed in [um/s]>)``.
             Note that ``min speed`` is optional.
         :param axes: a per-axis 2-or-3-tuple of
-            ``(<speed in [mm/s]>, <accel in [mm/s^2]>,
-            <min speed in [mm/s]>)``.  Note that ``min speed`` is optional.
+            ``(<speed in [um/s]>, <accel in [um/s^2]>,
+            <min speed in [um/s]>)``.  Note that ``min speed`` is optional.
 
         .. code-block:: python
 
@@ -249,8 +249,8 @@ class MultiStage:
         if none are specifed) as a dict.
 
         :return: a dict of size-4 lists, keyed by axis, of the settings per
-            specified axis. Lists contain: ``(<speed in [mm/s]>,
-            <acceleration in [mm/s^2]>, <minimum speed in [mm/s]>,
+            specified axis. Lists contain: ``(<speed in [um/s]>,
+            <acceleration in [um/s^2]>, <minimum speed in [um/s]>,
             <interval count>)``
 
         .. code-block:: python
@@ -274,7 +274,7 @@ class MultiStage:
         """set the soft limits per axis.
 
         :param: dict, keyed by axis, of 2-or-3-tuples representing
-            ``(<min limit>, <max limit>, <Optional error margin>)`` in [mm].
+            ``(<min limit>, <max limit>, <Optional error margin>)`` in [um].
 
         .. code-block:: python
 
@@ -291,7 +291,7 @@ class MultiStage:
         specified).
 
         :return: a dict, keyed by axis name, of 3-tuples representing:
-            ``(<min limit>, <max limit>, <error margin>)`` in [mm].
+            ``(<min limit>, <max limit>, <error margin>)`` in [um].
         """
         if not axes:  # Populate all axes if none are specified.
             axes = self.stages.keys()
