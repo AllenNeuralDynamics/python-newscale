@@ -100,8 +100,8 @@ class MultiStage:
 
         .. code-block:: python
 
-            stages.move_absolute(x=5, y=7.5, z=10) # move x, y, and z
-            stages.move_absolute(x=7.5, wait=False)  # move x only. Don't wait.
+            stages.move_absolute(x=50, y=75, z=10) # move x, y, and z
+            stages.move_absolute(x=75, wait=False)  # move x only. Don't wait.
 
         """
         for axis_name, abs_position_um in axes.items():
@@ -145,8 +145,8 @@ class MultiStage:
 
         .. code-block:: python
 
-            stages.move_relative(x=1.25, y=-2.5) # move x forward, y backward.
-            stages.move_relative(x=7.5, wait=False)  # move x only. Don't wait.
+            stages.move_relative(x=125, y=-25) # move x forward, y backward.
+            stages.move_relative(x=75, wait=False)  # move x only. Don't wait.
 
         """
         for axis_name, position_um in axes.items():

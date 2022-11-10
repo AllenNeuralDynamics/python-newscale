@@ -247,9 +247,13 @@ class M3LinearSmartStage:
         """Specify the step size taken (in um) in :meth:`distance_step` without
         stepping.
 
-        :param step_size_um: the size of the step.
+        :param step_size_um: the step size in [um]. Postive values are
+            interpretted as forward; negative values are interpretted as
+            backward.
         """
-        self._distance_step(Direction.NEITHER, step_size_um)
+        self.last_direction = Direction.FORWARD if step_size_um >= 0 \
+            else Direction.BACKWARD
+        self._distance_step(Direction.NEITHER, abs(step_size_um))
 
     # <07>
     def clear_encoder_count(self):
