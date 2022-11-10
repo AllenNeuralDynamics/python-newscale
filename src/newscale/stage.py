@@ -206,26 +206,16 @@ class M3LinearSmartStage:
                                      f"{step_size_ticks:08x}"))
 
     # <06> variant
-    def set_distance_step_size(self, step_size_um: float):
-        """Specify the step size taken (in um) in :meth:`distance_step`.
-        Convenience function.
-
-        :param step_size_um: the size of the step.
-        """
-        self._distance_step(Direction.NEITHER, step_size_um)
-
-    # <06> variant
     def distance_step(self, step_size_um: float = None):
-        """Take a step of size ``step_size`` forward (if `step_size_um` >= 0)
-        or backward (if `step_size_um` < 0).
+        """Take a step of size ``step_size_um`` forward
+        (if ``step_size_um`` >= 0) or backward (if ``step_size_um`` < 0).
         If no step size is specified, the previous step size will be used.
 
-        :param step_size_um: the step size. Postive values are interpretted as
-            forward; negative values are interpretted as backward.
+        :param step_size_um: the step size in [um]. Postive values are
+            interpretted as forward; negative values are interpretted as
+            backward.
 
         .. code-block:: python
-
-            from newscale.device_codes import Direction as Dir
 
             stage.distance_step(10.0)  # step forward 10 [um].
             stage.distance_step(-10.0)  # step backward 10 [um].
@@ -235,6 +225,15 @@ class M3LinearSmartStage:
         """
         direction = Direction.FORWARD if step_size_um >= 0 else Direction.BACKWARD
         self._distance_step(direction, abs(step_size_um))
+
+    # <06> variant
+    def set_distance_step_size(self, step_size_um: float):
+        """Specify the step size taken (in um) in :meth:`distance_step` without
+        stepping.
+
+        :param step_size_um: the size of the step.
+        """
+        self._distance_step(Direction.NEITHER, step_size_um)
 
     # <07>
     def clear_encoder_count(self):
