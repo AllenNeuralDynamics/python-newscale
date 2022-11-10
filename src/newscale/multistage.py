@@ -111,6 +111,11 @@ class MultiStage:
         # Poll position vector until we have reached the target or timeout.
         start_time = perf_counter()
         while perf_counter() - start_time < self.__class__.MOVE_TIMEOUT_S:
+            # Sleep first before polling state.
+            # Sleep sufficiently long enough to avoid a race condition where
+            # the command has been dispatched from the pc but has not been
+            # processed by the stage such that it changes its state.
+            sleep(0.01)
             stats = {x: self.stages[x].get_closed_loop_state_and_position()[0]
                      for x in axes.keys()}
             if any([stats[x][StateBit.STALLED] for x in axes.keys()]):
@@ -119,7 +124,52 @@ class MultiStage:
                     and stats[x][StateBit.ON_TARGET]
                     for x in axes.keys()]):
                 return
+        raise RuntimeError("Axes timed out trying to reach target position.")
+
+    @axis_check('wait')
+    def move_relative(self, wait: bool = True, **axes: float):
+        """Move the specified axes by a relative amount.
+
+        Note: the multistage will `not` travel in a straight line to its
+        destination unless accelerations and speeds are set to do so.
+
+        Note: the stage must first be in closed loop mode.
+
+        Note: positive values are interpretted as forward movement; negative
+        values are interpretted as backward movement.
+
+        :param wait: bool indicating if this function should block until the
+            stage has reached its destination.
+        :param axes: one or more axes specified by name with their relative
+            move amount specified in [um].
+
+        .. code-block:: python
+
+            stages.move_relative(x=1.25, y=-2.5) # move x forward, y backward.
+            stages.move_relative(x=7.5, wait=False)  # move x only. Don't wait.
+
+        """
+        for axis_name, position_um in axes.items():
+            direction = Direction.FORWARD if position_um >= 0 else Direction.BACKWARD
+            self.stages[axis_name].distance_step(direction, abs(position_um))
+        if not wait:
+            return
+        # Poll position vector until we have reached the target or timeout.
+        start_time = perf_counter()
+        while perf_counter() - start_time < self.__class__.MOVE_TIMEOUT_S:
+            # Sleep first before polling state.
+            # Sleep sufficiently long enough to avoid a race condition where
+            # the command has been dispatched from the pc but has not been
+            # processed by the stage such that it changes its state.
             sleep(0.01)
+            stats = {x: self.stages[x].get_closed_loop_state_and_position()[0]
+                     for x in axes.keys()}
+            if any([stats[x][StateBit.STALLED] for x in axes.keys()]):
+                raise RuntimeError("One or more axes is stalled.")
+            if all([(not stats[x][StateBit.RUNNING])
+                    and stats[x][StateBit.ON_TARGET]
+                    for x in axes.keys()]):
+                return
         raise RuntimeError("Axes timed out trying to reach target position.")
 
     @axis_check('wait')

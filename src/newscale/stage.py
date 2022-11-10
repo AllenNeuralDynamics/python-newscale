@@ -180,8 +180,8 @@ class M3LinearSmartStage:
                                      step_interval, step_duration))
 
     # <06>
-    def _distance_step(self, direction: Direction = Direction.NEITHER,
-                       step_size_um: float = None):
+    def distance_step(self, direction: Direction = Direction.NEITHER,
+                      step_size_um: float = None):
         """Take a step of size ``step_size`` in the specified direction.
         If no step size is specified, the previous step size will be used.
         If :attr:`~newscale.device_codes.Direction.NEITHER` is specified
@@ -209,18 +209,7 @@ class M3LinearSmartStage:
 
         :param step_size_um: the size of the step. Optional.
         """
-        self._distance_step(Direction.NEITHER, step_size_um)
-
-    # <06> variant
-    def step(self, direction: Direction):
-        """Take a step in the specified direction of the pre-specied step size.
-        Step size is specified with :meth:`set_distance_step_size`.
-
-        :param direction: direction to step in.
-            :attr:`~newscale.device_codes.Direction.NEITHER` is also
-            acceptable, in which case the step size will be saved as default.
-        """
-        self._distance_step(direction)
+        self.distance_step(Direction.NEITHER, step_size_um)
 
     # <07>
     def clear_encoder_count(self):
