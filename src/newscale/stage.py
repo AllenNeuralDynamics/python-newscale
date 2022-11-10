@@ -52,6 +52,7 @@ class M3LinearSmartStage:
         # Attributes.
         self.time_interval_us = None
         self.step_size_specified = False
+        self.last_direction = Direction.NEITHER
 
     @staticmethod
     def _get_cmd_str(cmd: Cmd, *args: str):
@@ -190,18 +191,28 @@ class M3LinearSmartStage:
 
         :param direction: direction to step in.
             :attr:`~newscale.device_codes.Direction.NEITHER` is also
-            acceptable, in which case the step size will be saved as default.
-        :param step_size_um: the size of the step. Optional.
+            acceptable, in which case the step size will be saved. Note that
+            ``step_size`` is not optional in this case.
+        :param step_size_um: the size of the step. Optional if a direction is
+            specified.
         """
+        if direction == Direction.NEITHER and step_size_um is None:
+            raise ValueError("Step size must be specified if direction is "
+                             "unspecified")
+        # Step by the previously-specified amount.
+        if step_size_um is None:
+            if not self.step_size_specified:
+                # The stage's default step size is technically undefined, but
+                # let the user do it anyway.
+                self.log.warning("Distance step step size was never specified.")
+            self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP, direction.value))
+            return
+        # Save whether we have ever specified a step size before.
+        self.step_size_specified = True
+        # Limit checks.
         step_size_ticks = round(step_size_um*TICKS_PER_UM)  # 32 bit unsigned.
         assert step_size_ticks.bit_length() < 32, "Step size exceeds maximum."
-        # Save whether we have ever configured a step size before.
-        if step_size_um is not None:
-            self.step_size_specified = True
-        # The stage default step size is technically undefined, but let the
-        # user do it anyway.
-        if not self.step_size_specified:
-            self.log.warning("Distance step step size was never specified.")
+        # Step by a specified amount.
         self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP, direction.value,
                                      f"{step_size_ticks:08x}"))
 
@@ -223,8 +234,13 @@ class M3LinearSmartStage:
             stage.distance_step()  # step backward 10 [um] again.
 
         """
-        direction = Direction.FORWARD if step_size_um >= 0 else Direction.BACKWARD
-        self._distance_step(direction, abs(step_size_um))
+        direction = self.last_direction
+        if step_size_um is None:  # Step using previous step size.
+            self._distance_step(direction)
+        else:  # Step with the specified step size.
+            direction = Direction.FORWARD if step_size_um >= 0 else Direction.BACKWARD
+            self.last_direction = direction
+            self._distance_step(direction, abs(step_size_um))
 
     # <06> variant
     def set_distance_step_size(self, step_size_um: float):
