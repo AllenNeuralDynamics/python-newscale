@@ -150,8 +150,7 @@ class MultiStage:
 
         """
         for axis_name, position_um in axes.items():
-            direction = Direction.FORWARD if position_um >= 0 else Direction.BACKWARD
-            self.stages[axis_name].distance_step(direction, abs(position_um))
+            self.stages[axis_name].distance_step(position_um)
         if not wait:
             return
         # Poll position vector until we have reached the target or timeout.

@@ -180,8 +180,8 @@ class M3LinearSmartStage:
                                      step_interval, step_duration))
 
     # <06>
-    def distance_step(self, direction: Direction = Direction.NEITHER,
-                      step_size_um: float = None):
+    def _distance_step(self, direction: Direction = Direction.NEITHER,
+                       step_size_um: float = None):
         """Take a step of size ``step_size`` in the specified direction.
         If no step size is specified, the previous step size will be used.
         If :attr:`~newscale.device_codes.Direction.NEITHER` is specified
@@ -198,18 +198,43 @@ class M3LinearSmartStage:
         # Save whether we have ever configured a step size before.
         if step_size_um is not None:
             self.step_size_specified = True
+        # The stage default step size is technically undefined, but let the
+        # user do it anyway.
         if not self.step_size_specified:
             self.log.warning("Distance step step size was never specified.")
-        self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP,direction.value,
+        self._send(self._get_cmd_str(Cmd.STEP_CLOSED_LOOP, direction.value,
                                      f"{step_size_ticks:08x}"))
 
     # <06> variant
     def set_distance_step_size(self, step_size_um: float):
-        """Specify the step size taken (in um) in :meth:`step`
+        """Specify the step size taken (in um) in :meth:`distance_step`.
+        Convenience function.
 
-        :param step_size_um: the size of the step. Optional.
+        :param step_size_um: the size of the step.
         """
-        self.distance_step(Direction.NEITHER, step_size_um)
+        self._distance_step(Direction.NEITHER, step_size_um)
+
+    # <06> variant
+    def distance_step(self, step_size_um: float = None):
+        """Take a step of size ``step_size`` forward (if `step_size_um` >= 0)
+        or backward (if `step_size_um` < 0).
+        If no step size is specified, the previous step size will be used.
+
+        :param step_size_um: the step size. Postive values are interpretted as
+            forward; negative values are interpretted as backward.
+
+        .. code-block:: python
+
+            from newscale.device_codes import Direction as Dir
+
+            stage.distance_step(10.0)  # step forward 10 [um].
+            stage.distance_step(-10.0)  # step backward 10 [um].
+            stage.distance_step()  # step backward 10 [um] again.
+            stage.distance_step()  # step backward 10 [um] again.
+
+        """
+        direction = Direction.FORWARD if step_size_um >= 0 else Direction.BACKWARD
+        self._distance_step(direction, abs(step_size_um))
 
     # <07>
     def clear_encoder_count(self):
