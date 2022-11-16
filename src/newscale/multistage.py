@@ -238,7 +238,7 @@ class MultiStage:
         """
         if global_setting is not None:
             for _, axis in self.stages.items():
-                axis.set_set_closed_loop_speed_and_accel(*global_setting)
+                axis.set_closed_loop_speed_and_accel(*global_setting)
         else:
             for name, settings in axes.items():
                 self.stages[name].set_closed_loop_speed_and_accel(*settings)
