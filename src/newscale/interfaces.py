@@ -4,11 +4,11 @@ import logging
 from socket import AF_INET, SOCK_STREAM, socket
 from sys import platform as PLATFORM
 
-if PLATFORM == 'linux':
-    from serial.tools.list_ports import comports as list_comports
-    from serial import Serial
-elif PLATFORM == 'win32':
-    from usbxpress import USBXpressLib
+from serial.tools.list_ports import comports as list_comports
+from serial import Serial
+
+if PLATFORM == 'win32':
+    from .usbxpress import USBXpressLib, USBXpressDevice
 
 from newscale.device_codes import TRANSCEIVER_PREFIX, BaudRateCode
 from newscale.device_codes import TransceiverCmd as Cmd
@@ -105,11 +105,11 @@ class USBInterface(HardwareInterface):
                     if (comport.pid == PID_NEWSCALE):
                         ports.append(comport.device)
         elif PLATFORM== 'win32':
-            n = usbxpress.USBXpressLib().get_num_devices()
+            n = USBXpressLib().get_num_devices()
             for i in range(n):
-                device = usbxpress.USBXpressDevice(i)
-                if (device.get_vid() == VID_NEWSCALE):
-                    if (device.get_pid() == PID_NEWSCALE):
+                device = USBXpressDevice(i)
+                if (int(device.get_vid(), 16) == VID_NEWSCALE):
+                    if (int(device.get_pid(), 16) == PID_NEWSCALE):
                         ports.append(device.get_serial_number())
         return ports
 
