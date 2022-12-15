@@ -5,7 +5,7 @@ from random import uniform
 from time import perf_counter, sleep
 
 from newscale.device_codes import Direction
-from newscale.multistage import USBXYZStage
+from newscale.multistage import USBXYZStage, PoEXYZStage
 
 # Uncomment for some prolific log statements.
 #import logging
@@ -18,9 +18,11 @@ from newscale.multistage import USBXYZStage
 MIN_TRAVEL_UM = 0
 MAX_TRAVEL_UM = 15000
 
+# Create Stage depending on interface.
 port = '/dev/ttyUSB0'
-
 stage = USBXYZStage(port)
+#ip_address = "10.128.49.57"
+#stage = PoEXYZStage(ip_address)
 
 # Closed loop moves.
 print("Moving and waiting")

@@ -9,12 +9,26 @@ Welcome to Python-Newscale's documentation!
     :members:
     :member-order: bysource
 
-.. autoclass:: newscale.multistage.USBXYZStage
+.. autoclass:: newscale.multistage.MultiStage
     :members:
     :member-order: bysource
     :inherited-members:
 
+.. autoclass:: newscale.multistage.PoEXYZStage
+    :members:
+
+.. autoclass:: newscale.multistage.USBXYZStage
+    :members:
+..
+    :member-order: bysource
+    :inherited-members:
+
 .. autoclass:: newscale.interfaces.M3USBInterface
+    :members:
+    :member-order: bysource
+    :inherited-members:
+
+.. autoclass:: newscale.interfaces.PoEInterface
     :members:
     :member-order: bysource
     :inherited-members:

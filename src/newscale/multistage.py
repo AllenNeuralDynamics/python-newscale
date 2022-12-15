@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 
 from newscale.device_codes import (Direction, DriveMode, Mode, StateBit,
                                    parse_stage_reply)
-from newscale.interfaces import USBInterface
+from newscale.interfaces import USBInterface, PoEInterface
 from newscale.stage import M3LinearSmartStage
 
 
@@ -287,7 +287,7 @@ class MultiStage:
         """
         if global_setting is not None:
             for _, axis in self.stages.items():
-                axis.set_set_closed_loop_speed_and_accel(*global_setting)
+                axis.set_closed_loop_speed_and_accel(*global_setting)
         else:
             for name, settings in axes.items():
                 self.stages[name].set_closed_loop_speed_and_accel(*settings)
@@ -385,13 +385,13 @@ class USBXYZStage(MultiStage):
             from newscale.multistage import USBXYZStage
             from newscale.interfaces import USBInterface
 
-            # Interface created internally.
+            # Option A: Interface created internally.
             multistage = USBXYZStage('COM4')
 
-            # Interface created internally at a specified baud rate (rare).
+            # Option B: Interface created internally at a specified baud rate (rare).
             multistage = USBXYZStage('COM4', 115200)
 
-            # Create interface separately and pass it in.
+            # Option C: Create interface separately and pass it in.
             interface = USBInterface('COM4')
             multistage = USBXYZStage(usb_interface=interface)
 
@@ -402,6 +402,46 @@ class USBXYZStage(MultiStage):
                               "must be specified.")
         self.interface = usb_interface if usb_interface and not port \
             else USBInterface(port, baud_rate)
+        # Create 3 stages with corresponding addresses.
+        stages = {'x': M3LinearSmartStage(self.interface, '01'),
+                  'y': M3LinearSmartStage(self.interface, '02'),
+                  'z': M3LinearSmartStage(self.interface, '03')}
+        super().__init__(**stages)
+
+
+class PoEXYZStage(MultiStage):
+    """An XYZ Stage from a single Power-over-Ethernet interface."""
+
+    def __init__(self, ip_address: str = None,
+                 poe_interface: PoEInterface = None):
+        """Create a PoEXYZStage object on a port and baud rate (if specified),
+        or create from an existing interface.
+
+        Note: ``ip_address`` xor ``poe_interface`` can be specified. (i.e: one
+        or the other, but not both.)
+
+        :param ip_address: ip address at which to create a PoE interface
+        :param poe_interface: an existing power-over-ethernet interface
+
+        .. code-block:: python
+
+            from newscale.multistage import PoEXYZStage
+            from newscale.interfaces import PoEInterface
+
+            # Option A: Interface created internally.
+            multistage = PoEXYZStage('10.128.49.57')
+
+            # Option B: Create interface separately and pass it in.
+            interface = PoEInterface('10.128.49.57')
+            multistage = PoEXYZStage(poe_interface=interface)
+
+        """
+        if not ((ip_address is None) ^ (poe_interface is None)):
+            raise SyntaxError("Exclusively either ip_address or poe_interface"
+                              "(i.e: one or the other, but not both) options "
+                              "must be specified.")
+        self.interface = poe_interface if poe_interface and not ip_address \
+            else PoEInterface(ip_address)
         # Create 3 stages with corresponding addresses.
         stages = {'x': M3LinearSmartStage(self.interface, '01'),
                   'y': M3LinearSmartStage(self.interface, '02'),

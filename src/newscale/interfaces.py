@@ -1,6 +1,7 @@
 """Set of hardware interfaces through which we can communicate with stages."""
 
 import logging
+from socket import AF_INET, SOCK_STREAM, socket
 
 from serial import Serial
 
@@ -168,3 +169,44 @@ class M3USBInterface(USBInterface):
         self.send(msg)
         _, _, br_code = parse_tr_reply(self.read())
         return BaudRateCode.inverse[f"{br_code:02x}"]
+
+
+class PoEInterface(HardwareInterface):
+    """PoE-to-Serial interface, which may be a direct link to one stage or a
+    hub to many. If an address is specified when sending, then the device
+    acts as a hub and selects that device first.
+    """
+
+    BUFFER_SIZE = 1024
+    PORT = 23
+
+    def __init__(self, address: str, sock: socket = None):
+        name = address if socket is not None \
+            else sock.getpeername()[0] if sock is not None else None
+        # Use existing socket object or create a new one.
+        self.sock = socket(AF_INET, SOCK_STREAM) \
+            if address and not sock else sock
+        self.sock.connect((address, self.__class__.PORT))
+        super().__init__(name)
+        # Handshake with the interface hardware.
+
+    def send(self, msg: str, address: str = None):
+        if address is not None:
+            if self.last_address != address:
+                self._select_stage(address)
+        # Note: this implementation does NOT handle "command prefixes" if any
+        # exist. (See Newscale_PathwaySoftwareManual.pdf pg73 for more info.)
+        # Create a situation-specific debug message.
+        address_msg = f"On address: '{address}', s" if address else "S"
+        debug_msg = f"{address_msg}ending: {repr(msg)}"
+        self.log.debug(debug_msg)
+        self.sock.sendall(msg.encode('ascii'))
+
+    def read(self, address: str = None):
+        if address is not None:
+            if self.last_address != address:
+                self._select_stage(address)
+        data = self.sock.recv(self.__class__.BUFFER_SIZE).decode('utf-8')
+        address_msg = f"On address: '{address}', r" if address else "R"
+        self.log.debug(f"{address_msg}ead back {repr(data)}")
+        return data
