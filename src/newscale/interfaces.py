@@ -2,13 +2,20 @@
 
 import logging
 from socket import AF_INET, SOCK_STREAM, socket
+from sys import platform as PLATFORM
 
-from serial import Serial
+if PLATFORM == 'linux':
+    from serial.tools.list_ports import comports as list_comports
+    from serial import Serial
+elif PLATFORM == 'win32':
+    from usbxpress import USBXpressLib
 
 from newscale.device_codes import TRANSCEIVER_PREFIX, BaudRateCode
 from newscale.device_codes import TransceiverCmd as Cmd
 from newscale.device_codes import parse_tr_reply
 
+VID_NEWSCALE = 0x10c4
+PID_NEWSCALE = 0xea61
 
 class HardwareInterface:
 
@@ -88,6 +95,23 @@ class USBInterface(HardwareInterface):
             if port and not serial else serial
         # Handshake with the Interface hardware.
         super().__init__(name)
+
+    @classmethod
+    def list_available_ports(cls):
+        ports = []
+        if PLATFORM == 'linux':
+            for comport in list_comports():
+                if (comport.vid == VID_NEWSCALE):
+                    if (comport.pid == PID_NEWSCALE):
+                        ports.append(comport.device)
+        elif PLATFORM== 'win32':
+            n = usbxpress.USBXpressLib().get_num_devices()
+            for i in range(n):
+                device = usbxpress.USBXpressDevice(i)
+                if (device.get_vid() == VID_NEWSCALE):
+                    if (device.get_pid() == PID_NEWSCALE):
+                        ports.append(device.get_serial_number())
+        return ports
 
     def send(self, msg: str, address: str = None):
         """Send a message to a specific device.
