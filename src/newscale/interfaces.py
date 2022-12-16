@@ -61,6 +61,87 @@ class HardwareInterface:
         raise NotImplementedError("To be implemented by the child class.")
 
 
+class NewScaleSerial():
+
+    """
+    Cross-platform abstraction layer for New Scale USB Serial devices
+    Usage:
+        instances = NewScaleSerial.get_instances()
+        -> [newScaleSerial1, newScaleSerial2]
+        for instance in instances:
+            print('serial number = ', instance.get_serial_number())
+    """
+
+    def __init__(self, serial_number, pyserial_device=None, usbxpress_device=None):
+        self.sn = serial_number
+        if pyserial_device:
+            self.t = 'pyserial'
+            self.io = pyserial_device
+        elif usbxpress_device:
+            self.t = 'usbxpress'
+            self.io = usbxpress_device
+
+    @classmethod
+    def get_instances(cls):
+        instances = []
+        if PLATFORM == 'linux':
+            for comport in list_comports():
+                if (comport.vid == VID_NEWSCALE):
+                    if (comport.pid == PID_NEWSCALE):
+                        hwid = comport.hwid
+                        serial_number = hwid.split()[2].split('=')[1]
+                        instances.append(cls(serial_number,
+                                        pyserial_device=Serial(comport.device)))    # does this work?
+        elif PLATFORM== 'win32':
+            n = USBXpressLib().get_num_devices()
+            for i in range(n):
+                device = USBXpressDevice(i)
+                if (int(device.get_vid(), 16) == VID_NEWSCALE):
+                    if (int(device.get_pid(), 16) == PID_NEWSCALE):
+                        serial_number = device.get_serial_number()
+                        instances.append(cls(serial_number, usbxpress_device=device))   # does this work?
+        return instances
+
+    def get_port_name(self):
+        if self.t == 'pyserial':
+            return self.port
+        elif self.t == 'usbxpress':
+            return 'USBXpress Device'
+
+    def get_serial_number(self):
+        return self.sn
+
+    def set_baudrate(self, baudrate):
+        if self.t == 'pyserial':
+            self.io.baudrate = baudrate
+        elif self.t == 'usbxpress':
+            self.io.set_baud_rate(baudrate)
+
+    def set_timeout(self, timeout):
+        if self.t == 'pyserial':
+            self.io.timeout = timeout
+        elif self.t == 'usbxpress':
+            self.io.set_timeout(timeout, timeout)
+
+    def write(self, data):
+        if self.t == 'pyserial':
+            self.io.write(data)
+        elif self.t == 'usbxpress':
+            self.io.write(data) # branching unnecessary?
+
+    def read(self, nbytes):
+        if self.t == 'pyserial':
+            data = self.io.read_until(b'\r').decode('utf8')
+        elif self.t == 'usbxpress':
+            # homebrew read until
+            data = ''
+            while True:
+                c = self.io.read(1).decode()
+                data += c   # do we include the terminator?
+                if (c == b'\r'): break
+        return data
+
+
 class USBInterface(HardwareInterface):
     """Generic USB-to-Serial interface, which may be a direct link to one stage
     or a hub to many. If an address is specified when sending, then the device
@@ -95,23 +176,6 @@ class USBInterface(HardwareInterface):
             if port and not serial else serial
         # Handshake with the Interface hardware.
         super().__init__(name)
-
-    @classmethod
-    def list_available_ports(cls):
-        ports = []
-        if PLATFORM == 'linux':
-            for comport in list_comports():
-                if (comport.vid == VID_NEWSCALE):
-                    if (comport.pid == PID_NEWSCALE):
-                        ports.append(comport.device)
-        elif PLATFORM== 'win32':
-            n = USBXpressLib().get_num_devices()
-            for i in range(n):
-                device = USBXpressDevice(i)
-                if (int(device.get_vid(), 16) == VID_NEWSCALE):
-                    if (int(device.get_pid(), 16) == PID_NEWSCALE):
-                        ports.append(device.get_serial_number())
-        return ports
 
     def send(self, msg: str, address: str = None):
         """Send a message to a specific device.
