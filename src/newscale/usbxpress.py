@@ -107,7 +107,7 @@ class USBXpressLib(object):
         """ Class constructor. """
         # Get DLL from the directory where the USBXpress Installer puts it.
         if os.name == 'nt':
-            self._dll = ctypes.WinDLL("C:\\SiliconLabs\\MCU\\USBXpress_SDK\\Library\\Host\\Windows\\x64\\SiUSBXp.dll"))
+            self._dll = ctypes.WinDLL("C:\\SiliconLabs\\MCU\\USBXpress_SDK\\Library\\Host\\Windows\\x64\\SiUSBXp.dll")
         else:
             raise OSError("USBXpress wrapper not implemented for os %r" % os.name)
         

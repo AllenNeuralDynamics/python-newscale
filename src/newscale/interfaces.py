@@ -79,7 +79,10 @@ class NewScaleSerial():
             self.io = pyserial_device
         elif usbxpress_device:
             self.t = 'usbxpress'
+            usbxpress_device.open()
             self.io = usbxpress_device
+        self.set_timeout(1)
+        self.set_baudrate(250000)
 
     @classmethod
     def get_instances(cls):
@@ -104,7 +107,7 @@ class NewScaleSerial():
 
     def get_port_name(self):
         if self.t == 'pyserial':
-            return self.port
+            return self.io.port
         elif self.t == 'usbxpress':
             return 'USBXpress Device'
 
@@ -121,7 +124,7 @@ class NewScaleSerial():
         if self.t == 'pyserial':
             self.io.timeout = timeout
         elif self.t == 'usbxpress':
-            self.io.set_timeout(timeout, timeout)
+            self.io.set_timeout(timeout/1000., timeout/1000.)
 
     def write(self, data):
         if self.t == 'pyserial':
@@ -129,7 +132,7 @@ class NewScaleSerial():
         elif self.t == 'usbxpress':
             self.io.write(data) # branching unnecessary?
 
-    def read(self, nbytes):
+    def readLine(self):
         if self.t == 'pyserial':
             data = self.io.read_until(b'\r').decode('utf8')
         elif self.t == 'usbxpress':
@@ -148,34 +151,28 @@ class USBInterface(HardwareInterface):
     acts as a hub and selects that device first.
     """
 
-    def __init__(self, port: str = None, baud_rate: int = 250000,
-                 serial: Serial = None):
-        """Init; create a Serial object from port or use an existing one.
+    #def __init__(self, port: str = None, baud_rate: int = 250000,
+    #             serial: Serial = None):
+    def __init__(self, serial: NewScaleSerial):
+        """Init; create a USBInterface object from an existing NewScaleSerial
+            instance.
 
-        :param port: serial port on which to create the Serial object. If
-            unspecified, `serial` will be used instead.
-        :param baud_rate: baud rate to create the serial port. Ignored if a
-            `serial` object is specified.
-        :param serial: existing serial object. If unspecified, a Serial object
-            will be creatd from the port.
+        :param serial: existing NewScaleSerial object
 
         .. code-block:: python
 
-            interface = USBInterface('COM4')  # take the default baud rate
-            interface = USBInterface('COM4', 115200)  # take a custom baud rate
-
-            from serial import Serial
-            ser = Serial('COM4', baud_rate=250000)
-            interface = USBInterface(serial=ser)
+            serial = NewScaleSerial.get_instances()[0]
+            interface = USBInterface(serial)
 
         """
-        name = port if port is not None \
-            else serial.port if serial is not None else None
-        # Use existing Serial object or create a new one.
-        self.ser = Serial(port, baudrate=baud_rate, timeout=0.5) \
-            if port and not serial else serial
+        #name = port if port is not None \
+        #    else serial.port if serial is not None else None
+        ## Use existing Serial object or create a new one.
+        #self.ser = Serial(port, baudrate=baud_rate, timeout=0.5) \
+        #    if port and not serial else serial
+        self.serial = serial
         # Handshake with the Interface hardware.
-        super().__init__(name)
+        super().__init__(self.serial.get_port_name())
 
     def send(self, msg: str, address: str = None):
         """Send a message to a specific device.
@@ -205,7 +202,8 @@ class USBInterface(HardwareInterface):
         debug_msg = f"{address_msg}ending: {repr(msg)}{tr_encoding}"
         self.log.debug(debug_msg)
         out_msg = tr_msg if tr_msg is not None else msg.encode('ascii')
-        self.ser.write(out_msg)
+        #self.ser.write(out_msg)
+        self.serial.write(out_msg)
 
     def read(self, address: str = None):
         """Read a reply (up to the ``'\\r'`` character) and return it.
@@ -215,7 +213,8 @@ class USBInterface(HardwareInterface):
             value immediately after writing to it such that we collect the
             correct response.
         """
-        data = self.ser.read_until(b'\r').decode('utf8')
+        #data = self.ser.read_until(b'\r').decode('utf8')
+        data = self.serial.readLine()
         # Warn if the data is supposed to go to a different stage.
         if address is not None:
             if self.last_address != address:

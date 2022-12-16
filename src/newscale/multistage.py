@@ -408,9 +408,6 @@ class USBXYZStage(MultiStage):
                   'z': M3LinearSmartStage(self.interface, '03')}
         super().__init__(**stages)
 
-    @classmethod
-    def list_available_ports(cls):
-        return USBInterface.list_available_ports()
 
 class PoEXYZStage(MultiStage):
     """An XYZ Stage from a single Power-over-Ethernet interface."""
