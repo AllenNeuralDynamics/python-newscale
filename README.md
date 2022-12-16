@@ -29,23 +29,8 @@ stage = USBXYZStage('COM4')
 ## Usage
 Check the [examples directory](examples) for more usage examples.
 
-## Provisioning an M3 USB Interface as a Virtual Com Port (Windows Only)
-The following extra steps must be taken on Windows only before the driver works.
-
-1. First, install Newscale's Pathway Software. (You may need to create an account first before you can download it.)
-Post-installation, the Silicon Labs USBXpress Driver should be installed (if it wasn't already).
-2. Next, install the Silicon Labs Virtual Com Port Driver.
-You can find the driver in the Newscale Pathway Software download (in the SI_COM folder) *or* on Silicon Labs' [website](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers?tab=downloads).
-3. Next, launch the NstUsbBridgeSetup.exe utility.
-This is likely located in: `C:\Program Files (x86)\New Scale Technologies\Closed,Open Loop Demo`.
-4. From the GUI, find your device, check **SiLabs' COM Port**, and click **Save Identity**.
-About 5 seconds must elapse. Then the device should show up in Device Manager as a Virtual Com Port.
-
-Note: you must re-run this utility and check **SiLabs' USB Port** if you want this device to re-communicate with Newscale's Pathway Software.
-
-
-It's worth mentioning that this utility has the effect of changing the device's PID from 0xEA61 to 0xEA60, which causes Windows to recognize it as a COM Port.
-Restoring the device to a **SiLabs' USB Port** changes it back to 0xEA60.
+## On Windows
+You must first install the [Silicon Labs USBXpress Driver](https://www.silabs.com/documents/public/software/install_USBXpress_SDK.exe).
 
 ## Troubleshooting
 The most likely issue with communicating with stages is baud rate mismatches.
