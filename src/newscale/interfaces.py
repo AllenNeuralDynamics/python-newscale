@@ -124,7 +124,8 @@ class NewScaleSerial():
         if self.t == 'pyserial':
             self.io.timeout = timeout
         elif self.t == 'usbxpress':
-            self.io.set_timeout(timeout/1000., timeout/1000.)
+            timeout_ms = int(timeout*1000)
+            self.io.set_timeouts(timeout_ms, timeout_ms)
 
     def write(self, data):
         if self.t == 'pyserial':
