@@ -142,7 +142,7 @@ class NewScaleSerial():
             while True:
                 c = self.io.read(1).decode()
                 data += c   # do we include the terminator?
-                if (c == b'\r'): break
+                if (c == '\r'): break
         return data
 
 
