@@ -3,6 +3,7 @@
 import logging
 
 from newscale.device_codes import BaudRateCode, Direction, DriveMode, Mode
+from newscale.device_codes import CalibrationType
 from newscale.device_codes import StageCmd as Cmd
 from newscale.device_codes import StateBit, parse_stage_reply
 from newscale.errors import IllegalCommandError, IllegalCommandFormatError
@@ -603,6 +604,14 @@ class M3LinearSmartStage:
         """
         _, _, br_code = self._send(self._get_cmd_str(Cmd.BAUD_RATE))
         return BaudRateCode.inverse[f"{br_code:02x}"]
+
+    # <87>
+    def calibrate_frequency(self, cal_type: CalibrationType = FORWARD_BOTH):
+        """run frequency calibration
+            default is Automatic Frequency calibration sweep, followed by an
+            incremental frequency calibration sweep, in the forward direction
+        """
+        self._send(self._get_cmd_str(Cmd.RUN_FREQ_CALIBRATION, cal_type))
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()

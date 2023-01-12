@@ -173,6 +173,14 @@ BaudRateCode = \
         250000: "04"
     })
 
+class CalibrationType(StrEnum):
+    BACKWARD_SWEEP = "0"
+    FORWARD_SWEEP = "1"
+    BACKWARD_INCREMENTAL = "2"
+    FORWARD_INCREMENTAL = "3"
+    BACKWARD_BOTH = "4"
+    FORWARD_BOTH = "5"
+
 
 class Direction(StrEnum):
     BACKWARD = "0"
