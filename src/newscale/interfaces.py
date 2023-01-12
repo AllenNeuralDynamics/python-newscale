@@ -128,20 +128,16 @@ class NewScaleSerial():
             self.io.set_timeouts(timeout_ms, timeout_ms)
 
     def write(self, data):
-        if self.t == 'pyserial':
-            self.io.write(data)
-        elif self.t == 'usbxpress':
-            self.io.write(data) # branching unnecessary?
+        self.io.write(data)
 
     def readLine(self):
         if self.t == 'pyserial':
             data = self.io.read_until(b'\r').decode('utf8')
         elif self.t == 'usbxpress':
-            # homebrew read until
             data = ''
             while True:
                 c = self.io.read(1).decode()
-                data += c   # do we include the terminator?
+                data += c
                 if (c == '\r'): break
         return data
 
@@ -152,8 +148,6 @@ class USBInterface(HardwareInterface):
     acts as a hub and selects that device first.
     """
 
-    #def __init__(self, port: str = None, baud_rate: int = 250000,
-    #             serial: Serial = None):
     def __init__(self, serial: NewScaleSerial):
         """Init; create a USBInterface object from an existing NewScaleSerial
             instance.
@@ -166,11 +160,6 @@ class USBInterface(HardwareInterface):
             interface = USBInterface(serial)
 
         """
-        #name = port if port is not None \
-        #    else serial.port if serial is not None else None
-        ## Use existing Serial object or create a new one.
-        #self.ser = Serial(port, baudrate=baud_rate, timeout=0.5) \
-        #    if port and not serial else serial
         self.serial = serial
         # Handshake with the Interface hardware.
         super().__init__(self.serial.get_port_name())
@@ -203,7 +192,6 @@ class USBInterface(HardwareInterface):
         debug_msg = f"{address_msg}ending: {repr(msg)}{tr_encoding}"
         self.log.debug(debug_msg)
         out_msg = tr_msg if tr_msg is not None else msg.encode('ascii')
-        #self.ser.write(out_msg)
         self.serial.write(out_msg)
 
     def read(self, address: str = None):
@@ -214,7 +202,6 @@ class USBInterface(HardwareInterface):
             value immediately after writing to it such that we collect the
             correct response.
         """
-        #data = self.ser.read_until(b'\r').decode('utf8')
         data = self.serial.readLine()
         # Warn if the data is supposed to go to a different stage.
         if address is not None:
