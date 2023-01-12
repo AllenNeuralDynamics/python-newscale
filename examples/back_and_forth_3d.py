@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+"""
+This demonstrates the use of USBXYZStage, taking the first instance of
+NewScaleSerial and moving it back and forth along all 3 axes.
+"""
+
 import sys
 
 from newscale.multistage import USBXYZStage
