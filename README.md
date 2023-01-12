@@ -39,7 +39,9 @@ It may be that you can communicate with the USB interface but not the stage that
 
 To connect to the M3-USB-3:1-EP on a different baud rate, you can simply pass it in:
 ````python
-stage = USBXYZStage('COM4', 115200)
+serial = NewScaleSerial.get_instances()[0]
+serial.set_baudrate(115200)
+multistage = USBXYZStage(usb_interface=USBInterface(serial))
 ````
 
 ## Contributing
