@@ -346,6 +346,12 @@ class MultiStage:
             axes = self.stages.keys()
         return {x: self.stages[x].get_soft_limits() for x in axes}
 
+    @axis_check()
+    def calibrate_all(self):
+        """Perform a frequency calibration on all axes."""
+        for stage in self.stages.values():
+            stage.calibrate_frequency()
+
     def enable_soft_limits(self):
         """Enable software travel limits on all axes."""
         for _, axis in self.stages.items():
