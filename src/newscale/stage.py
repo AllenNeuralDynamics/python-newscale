@@ -606,7 +606,7 @@ class M3LinearSmartStage:
         return BaudRateCode.inverse[f"{br_code:02x}"]
 
     # <87>
-    def calibrate_frequency(self, cal_type: CalibrationType = FORWARD_BOTH):
+    def calibrate_frequency(self, cal_type: CalibrationType = CalibrationType.FORWARD_BOTH):
         """run frequency calibration
             default is Automatic Frequency calibration sweep, followed by an
             incremental frequency calibration sweep, in the forward direction
