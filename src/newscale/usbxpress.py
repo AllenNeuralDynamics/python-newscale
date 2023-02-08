@@ -1,12 +1,26 @@
-#!/usr/bin/env python
-"""usbxpress.py
+"""
+usbxpress.py
 
 Python wrapper for SiUSBXp.dll. Works with Python 2.x and 3.x.
 
 Uses the 32-bit version of SiUSBXp.dll to ensure it works on 32-bit and 
 64-bit Windows machine. Does not work on any non-Windows OS.
 
+---
+
+Copyright 2019 by Silicon Labs, Inc.
+All rights reserved.
+
+This file is distributed under the terms of section 4.2.5 of Silicon Labs'
+Master Software License Agreement:
+
+https://www.silabs.com/about-us/legal/master-software-license-agreement
+
+Distribution of this Source Code confers no rights to the end user beyond use
+in an Authorized Application with Silicon Labs Devices.
+
 """
+
 import ctypes
 import logging
 import os
