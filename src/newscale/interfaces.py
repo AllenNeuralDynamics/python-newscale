@@ -15,7 +15,8 @@ from newscale.device_codes import TransceiverCmd as Cmd
 from newscale.device_codes import parse_tr_reply
 
 VID_NEWSCALE = 0x10c4
-PID_NEWSCALE = 0xea61
+PID_NEWSCALE_COMPORT = 0xea60
+PID_NEWSCALE_USBX = 0xea61
 
 class HardwareInterface:
 
@@ -90,19 +91,27 @@ class NewScaleSerial():
         if PLATFORM == 'linux':
             for comport in list_comports():
                 if (comport.vid == VID_NEWSCALE):
-                    if (comport.pid == PID_NEWSCALE):
+                    if (comport.pid == PID_NEWSCALE_COMPORT) or \
+                        (comport.pid == PID_NEWSCALE_USBX):
                         hwid = comport.hwid
                         serial_number = hwid.split()[2].split('=')[1]
                         instances.append(cls(serial_number,
-                                        pyserial_device=Serial(comport.device)))    # does this work?
+                                        pyserial_device=Serial(comport.device)))
         elif PLATFORM== 'win32':
             n = USBXpressLib().get_num_devices()
             for i in range(n):
                 device = USBXpressDevice(i)
                 if (int(device.get_vid(), 16) == VID_NEWSCALE):
-                    if (int(device.get_pid(), 16) == PID_NEWSCALE):
+                    if (int(device.get_pid(), 16) == PID_NEWSCALE_USBX):
                         serial_number = device.get_serial_number()
-                        instances.append(cls(serial_number, usbxpress_device=device))   # does this work?
+                        instances.append(cls(serial_number, usbxpress_device=device))
+            for comport in list_comports():
+                if (comport.vid == VID_NEWSCALE):
+                    if (comport.pid == PID_NEWSCALE_COMPORT):
+                        hwid = comport.hwid
+                        serial_number = hwid.split()[2].split('=')[1]
+                        instances.append(cls(serial_number,
+                                        pyserial_device=Serial(comport.device)))
         return instances
 
     def get_port_name(self):
