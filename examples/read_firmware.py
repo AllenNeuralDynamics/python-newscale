@@ -2,7 +2,7 @@
 
 import pprint
 
-from newscale.interfaces import M3USBInterface, PoEInterface
+from newscale.interfaces import NewScaleSerial, USBInterface
 from newscale.stage import M3LinearSmartStage
 
 # Uncomment for some prolific log statements.
@@ -14,8 +14,14 @@ from newscale.stage import M3LinearSmartStage
 #    logging.Formatter(fmt='%(asctime)s:%(name)s:%(levelname)s: %(message)s'))
 
 # Connect to a single stage.
-#stage = M3LinearSmartStage(PoEInterface(address="10.128.49.57"), "01")
-stage = M3LinearSmartStage(M3USBInterface(port='/dev/ttyUSB0'), "01")
+instances = NewScaleSerial.get_instances()
+if len(instances) == 0:
+    sys.exit(1)
+else:
+    serialInstance = instances[0]
+stage = M3LinearSmartStage(USBInterface(serialInstance), "01")
+
+# Print firmware version, closed loop state, position, and motor status
 print(f"Firmware is {stage.get_firmware_version()}.")
 pprint.pprint(stage.get_closed_loop_state_and_position())
 pprint.pprint(stage.get_motor_status())

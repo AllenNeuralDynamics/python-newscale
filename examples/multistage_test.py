@@ -3,9 +3,11 @@
 import pprint
 from random import uniform
 from time import perf_counter, sleep
+import sys
 
 from newscale.device_codes import Direction
 from newscale.multistage import USBXYZStage, PoEXYZStage
+from newscale.interfaces import NewScaleSerial, USBInterface
 
 # Uncomment for some prolific log statements.
 #import logging
@@ -18,9 +20,14 @@ from newscale.multistage import USBXYZStage, PoEXYZStage
 MIN_TRAVEL_UM = 0
 MAX_TRAVEL_UM = 15000
 
-# Create Stage depending on interface.
-port = '/dev/ttyUSB0'
-stage = USBXYZStage(port)
+# Create USBXYZStage
+instances = NewScaleSerial.get_instances()
+if len(instances) == 0:
+    sys.exit(1)
+serialInstance = instances[0]
+stage = USBXYZStage(usb_interface=USBInterface(serialInstance))
+
+# Create PoEXYZStage
 #ip_address = "10.128.49.57"
 #stage = PoEXYZStage(ip_address)
 

@@ -367,41 +367,22 @@ class MultiStage:
 class USBXYZStage(MultiStage):
     """An XYZ Stage from a single USB interface."""
 
-    def __init__(self, port: str = None, baud_rate: int = 250000,
-                 usb_interface: USBInterface = None):
-        """Create a USBXYZStage object on a port and baud rate (if specified),
-        or create from an existing interface.
+    def __init__(self, usb_interface: USBInterface):
+        """Create a USBXYZStage object from an existing interface.
 
-        Note: ``port`` xor ``usb_interface`` can be specified. (i.e: one or
-        the other, but not both.)
-
-        :param port: if specified, the port at which to create a USB interface
-        :param baud_rate: if specified the particular baud rate to use for the
-            port.
-        :param usb_interface: an existing usb interface
+        :param usb_interface: an existing USBInterface
 
         .. code-block:: python
 
             from newscale.multistage import USBXYZStage
-            from newscale.interfaces import USBInterface
+            from newscale.interfaces import USBInterface, NewScaleSerial
 
-            # Option A: Interface created internally.
-            multistage = USBXYZStage('COM4')
-
-            # Option B: Interface created internally at a specified baud rate (rare).
-            multistage = USBXYZStage('COM4', 115200)
-
-            # Option C: Create interface separately and pass it in.
-            interface = USBInterface('COM4')
+            serial_instances = NewScaleSerial.get_instances()
+            interface = USBInterface(serial_instances[0])
             multistage = USBXYZStage(usb_interface=interface)
 
         """
-        if not ((port is None) ^ (usb_interface is None)):
-            raise SyntaxError("Exclusively either port or usb_interface"
-                              "(i.e: one or the other, but not both) options "
-                              "must be specified.")
-        self.interface = usb_interface if usb_interface and not port \
-            else USBInterface(port, baud_rate)
+        self.interface = usb_interface
         # Create 3 stages with corresponding addresses.
         stages = {'x': M3LinearSmartStage(self.interface, '01'),
                   'y': M3LinearSmartStage(self.interface, '02'),
