@@ -1,22 +1,15 @@
 """Set of hardware interfaces through which we can communicate with stages."""
 
 import logging
-from socket import AF_INET, SOCK_STREAM, socket
-from sys import platform as PLATFORM
-
-from serial.tools.list_ports import comports as list_comports
-from serial import Serial
-
-if PLATFORM == 'win32':
-    from newscale.usbxpress import USBXpressLib, USBXpressDevice
-
 from newscale.device_codes import TRANSCEIVER_PREFIX, BaudRateCode
 from newscale.device_codes import TransceiverCmd as Cmd
 from newscale.device_codes import parse_tr_reply
+from newscale.new_scale_serial import NewScaleSerial
+from newscale.new_scale_serial import get_instances as get_newscale_instances
+from serial import Serial
+from socket import AF_INET, SOCK_STREAM, socket
+from typing import Union
 
-VID_NEWSCALE = 0x10c4
-PID_NEWSCALE_COMPORT = 0xea60
-PID_NEWSCALE_USBX = 0xea61
 
 class HardwareInterface:
 
@@ -62,119 +55,43 @@ class HardwareInterface:
         raise NotImplementedError("To be implemented by the child class.")
 
 
-class NewScaleSerial:
-
-    """
-    Cross-platform abstraction layer for New Scale USB Serial devices
-    Usage:
-        instances = NewScaleSerial.get_instances()
-        -> [newScaleSerial1, newScaleSerial2]
-        for instance in instances:
-            print('serial number = ', instance.get_serial_number())
-    """
-
-    def __init__(self, serial_number, pyserial_device=None, usbxpress_device=None):
-        self.sn = serial_number
-        if pyserial_device:
-            self.t = 'pyserial'
-            self.io = pyserial_device
-        elif usbxpress_device:
-            self.t = 'usbxpress'
-            usbxpress_device.open()
-            self.io = usbxpress_device
-        self.set_timeout(1)
-        self.set_baudrate(250000)
-
-    @classmethod
-    def get_instances(cls):
-        instances = []
-        if PLATFORM == 'linux':
-            for comport in list_comports():
-                if comport.vid == VID_NEWSCALE:
-                    if comport.pid in [PID_NEWSCALE_COMPORT, PID_NEWSCALE_USBX]:
-                        hwid = comport.hwid
-                        serial_number = hwid.split()[2].split('=')[1]
-                        instances.append(cls(serial_number,
-                                         pyserial_device=Serial(comport.device)))
-        elif PLATFORM == 'win32':
-            n = USBXpressLib().get_num_devices()
-            for i in range(n):
-                device = USBXpressDevice(i)
-                if int(device.get_vid(), 16) == VID_NEWSCALE:
-                    if int(device.get_pid(), 16) == PID_NEWSCALE_USBX:
-                        serial_number = device.get_serial_number()
-                        instances.append(cls(serial_number, usbxpress_device=device))
-            for comport in list_comports():
-                if comport.vid == VID_NEWSCALE:
-                    if comport.pid == PID_NEWSCALE_COMPORT:
-                        hwid = comport.hwid
-                        serial_number = hwid.split()[2].split('=')[1]
-                        instances.append(cls(serial_number,
-                                         pyserial_device=Serial(comport.device)))
-        return instances
-
-    def get_port_name(self):
-        if self.t == 'pyserial':
-            return self.io.port
-        elif self.t == 'usbxpress':
-            return 'USBXpress Device'
-
-    def get_serial_number(self):
-        return self.sn
-
-    def set_baudrate(self, baudrate: int):
-        if self.t == 'pyserial':
-            self.io.baudrate = baudrate
-        elif self.t == 'usbxpress':
-            self.io.set_baud_rate(baudrate)
-
-    def set_timeout(self, timeout_s: float):
-        if self.t == 'pyserial':
-            self.io.timeout = timeout_s
-        elif self.t == 'usbxpress':
-            timeout_ms = int(timeout_s * 1000)
-            self.io.set_timeouts(timeout_ms, timeout_ms)
-
-    def write(self, data: bytes):
-        self.io.write(data)
-
-    def readline(self):
-        """Read a reply (up to the ``'\\r'`` character) and return it.
-        :return: the line read with the ``'\\r'`` stripped
-        """
-        if self.t == 'pyserial':
-            return self.io.read_until(b'\r').decode('utf8')
-        elif self.t == 'usbxpress':
-            data = ''
-            while True:
-                c = self.io.read(1).decode()
-                data += c
-                if c == '\r':
-                    break
-            return data
-
-
 class USBInterface(HardwareInterface):
     """Generic USB-to-Serial interface, which may be a direct link to one stage
     or a hub to many. If an address is specified when sending, then the device
     acts as a hub and selects that device first.
     """
 
-    def __init__(self, serial: NewScaleSerial):
-        """Init; create a USBInterface object from an existing NewScaleSerial
-            instance.
+    def __init__(self, serial_number: str = None,
+                 serial: Union[NewScaleSerial, Serial] = None):
+        """Init; create a USBInterface based on the device serial number or
+            from an existing Serial or NewScaleSerial instance.
 
-        :param serial: existing NewScaleSerial object
+        :param serial_number: serial number for a New Scale Hub. If
+            unspecified, `serial` will be used instead.
+        :param serial: existing NewScaleSerial object. If unspecified,
+            `serial_number` will be used instead.
 
         .. code-block:: python
 
-            serial = NewScaleSerial.get_instances()[0]
+            # FIXME: test this.
+            interface = USBInterface("M3-USB-0")  # OR
+
+            serial = list(get_instances().values())[0]
             interface = USBInterface(serial)
 
         """
-        self.serial = serial
+        if all(param is None for param in [serial_number, serial]):
+            raise ValueError("USBInterface must be instantiated from either a "
+                             "serial number or an existing serial connection.")
+        if all(param is not None for param in [serial_number, serial]):
+            raise ValueError("Only one param must be specified to create a "
+                             "USBInterface.")
+        if serial_number is not None:
+            self.serial = get_newscale_instances()[serial_number]
+        else:
+            self.serial = serial
         # Handshake with the Interface hardware.
-        super().__init__(self.serial.get_port_name())
+        super().__init__(self.serial.port)
 
     def send(self, msg: str, address: str = None):
         """Send a message to a specific device.
@@ -214,7 +131,7 @@ class USBInterface(HardwareInterface):
             value immediately after writing to it such that we collect the
             correct response.
         """
-        data = self.serial.readline()
+        data = self.serial.read_until(b'\r').decode('utf8')
         # Warn if the data is supposed to go to a different stage.
         if address is not None:
             if self.last_address != address:
