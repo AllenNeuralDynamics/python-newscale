@@ -8,7 +8,7 @@ from serial.tools.list_ports import comports as list_comports
 from serial import Serial
 
 if PLATFORM == 'win32':
-    from .usbxpress import USBXpressLib, USBXpressDevice
+    from newscale.usbxpress import USBXpressLib, USBXpressDevice
 
 from newscale.device_codes import TRANSCEIVER_PREFIX, BaudRateCode
 from newscale.device_codes import TransceiverCmd as Cmd
@@ -62,7 +62,7 @@ class HardwareInterface:
         raise NotImplementedError("To be implemented by the child class.")
 
 
-class NewScaleSerial():
+class NewScaleSerial:
 
     """
     Cross-platform abstraction layer for New Scale USB Serial devices
@@ -90,28 +90,27 @@ class NewScaleSerial():
         instances = []
         if PLATFORM == 'linux':
             for comport in list_comports():
-                if (comport.vid == VID_NEWSCALE):
-                    if (comport.pid == PID_NEWSCALE_COMPORT) or \
-                        (comport.pid == PID_NEWSCALE_USBX):
+                if comport.vid == VID_NEWSCALE:
+                    if comport.pid in [PID_NEWSCALE_COMPORT, PID_NEWSCALE_USBX]:
                         hwid = comport.hwid
                         serial_number = hwid.split()[2].split('=')[1]
                         instances.append(cls(serial_number,
-                                        pyserial_device=Serial(comport.device)))
-        elif PLATFORM== 'win32':
+                                         pyserial_device=Serial(comport.device)))
+        elif PLATFORM == 'win32':
             n = USBXpressLib().get_num_devices()
             for i in range(n):
                 device = USBXpressDevice(i)
-                if (int(device.get_vid(), 16) == VID_NEWSCALE):
-                    if (int(device.get_pid(), 16) == PID_NEWSCALE_USBX):
+                if int(device.get_vid(), 16) == VID_NEWSCALE:
+                    if int(device.get_pid(), 16) == PID_NEWSCALE_USBX:
                         serial_number = device.get_serial_number()
                         instances.append(cls(serial_number, usbxpress_device=device))
             for comport in list_comports():
-                if (comport.vid == VID_NEWSCALE):
-                    if (comport.pid == PID_NEWSCALE_COMPORT):
+                if comport.vid == VID_NEWSCALE:
+                    if comport.pid == PID_NEWSCALE_COMPORT:
                         hwid = comport.hwid
                         serial_number = hwid.split()[2].split('=')[1]
                         instances.append(cls(serial_number,
-                                        pyserial_device=Serial(comport.device)))
+                                         pyserial_device=Serial(comport.device)))
         return instances
 
     def get_port_name(self):
@@ -123,32 +122,36 @@ class NewScaleSerial():
     def get_serial_number(self):
         return self.sn
 
-    def set_baudrate(self, baudrate):
+    def set_baudrate(self, baudrate: int):
         if self.t == 'pyserial':
             self.io.baudrate = baudrate
         elif self.t == 'usbxpress':
             self.io.set_baud_rate(baudrate)
 
-    def set_timeout(self, timeout):
+    def set_timeout(self, timeout_s: float):
         if self.t == 'pyserial':
-            self.io.timeout = timeout
+            self.io.timeout = timeout_s
         elif self.t == 'usbxpress':
-            timeout_ms = int(timeout*1000)
+            timeout_ms = int(timeout_s * 1000)
             self.io.set_timeouts(timeout_ms, timeout_ms)
 
-    def write(self, data):
+    def write(self, data: bytes):
         self.io.write(data)
 
-    def readLine(self):
+    def readline(self):
+        """Read a reply (up to the ``'\\r'`` character) and return it.
+        :return: the line read with the ``'\\r'`` stripped
+        """
         if self.t == 'pyserial':
-            data = self.io.read_until(b'\r').decode('utf8')
+            return self.io.read_until(b'\r').decode('utf8')
         elif self.t == 'usbxpress':
             data = ''
             while True:
                 c = self.io.read(1).decode()
                 data += c
-                if (c == '\r'): break
-        return data
+                if c == '\r':
+                    break
+            return data
 
 
 class USBInterface(HardwareInterface):
@@ -211,7 +214,7 @@ class USBInterface(HardwareInterface):
             value immediately after writing to it such that we collect the
             correct response.
         """
-        data = self.serial.readLine()
+        data = self.serial.readline()
         # Warn if the data is supposed to go to a different stage.
         if address is not None:
             if self.last_address != address:
