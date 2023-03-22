@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from newscale.interfaces import NewScaleSerial
+from newscale.new_scale_serial import get_instances
 
-instances = NewScaleSerial.get_instances()
-for i in instances:
-    print('Serial # %s, on %s' % (i.get_serial_number(), i.get_port_name()))
+instances = get_instances()
+for k, v in instances.items():
+    print(f"Serial #{k} connected on {v.port}")
