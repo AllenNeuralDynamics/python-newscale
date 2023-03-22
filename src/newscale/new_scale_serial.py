@@ -1,6 +1,5 @@
 """Utilities for accessing New Scale devices implemented as usbxpress devices."""
 
-from functools import lru_cache
 from newscale.usbxpress import USBXpressDevice
 from serial import Serial
 from serial.tools.list_ports import comports as list_comports
@@ -14,7 +13,6 @@ PID_NEWSCALE_COMPORT = 0xea60
 PID_NEWSCALE_USBX = 0xea61
 
 
-@lru_cache(maxsize=None)
 def get_instances():
     """Factory function to get all New Scale USB Serial hubs, regardless
     of VID/PID. These will be returned in a dict, keyed by serial number (str),
