@@ -73,11 +73,20 @@ class USBInterface(HardwareInterface):
 
         .. code-block:: python
 
-            # FIXME: test this.
-            interface = USBInterface("M3-USB-0")  # OR
+            # Create a connection from a known USB Interface serial number
+            interface = USBInterface(serial_number="46120")  # OR
 
-            serial = list(get_instances().values())[0]
-            interface = USBInterface(serial)
+            # Find all hubs and create a connection on the first one.
+            from newscale.new_scale_serial import get_instances()
+
+            ser = list(get_instances().values())[0]
+            interface = USBInterface(serial=ser)  # OR
+
+            # Create a connection manually by passing in a Serial instance.
+            from serial import Serial
+
+            ser = Serial("COM3", baudrate=250000)
+            interface = USBInterface(serial=ser)
 
         """
         if all(param is None for param in [serial_number, serial]):

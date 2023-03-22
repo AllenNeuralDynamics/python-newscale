@@ -7,7 +7,8 @@ import sys
 
 from newscale.device_codes import Direction
 from newscale.multistage import USBXYZStage, PoEXYZStage
-from newscale.interfaces import NewScaleSerial, USBInterface
+from newscale.interfaces import USBInterface
+from newscale.new_scale_serial import NewScaleSerial, get_instances
 
 # Uncomment for some prolific log statements.
 #import logging
@@ -21,11 +22,11 @@ MIN_TRAVEL_UM = 0
 MAX_TRAVEL_UM = 15000
 
 # Create USBXYZStage
-instances = NewScaleSerial.get_instances()
+instances = list(get_instances().values())
 if len(instances) == 0:
     sys.exit(1)
 serialInstance = instances[0]
-stage = USBXYZStage(usb_interface=USBInterface(serialInstance))
+stage = USBXYZStage(usb_interface=USBInterface(serial=serialInstance))
 
 # Create PoEXYZStage
 #ip_address = "10.128.49.57"

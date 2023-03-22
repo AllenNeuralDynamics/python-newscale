@@ -1,31 +1,30 @@
 """Utilities for accessing New Scale devices implemented as usbxpress devices."""
 
-try:  # cache appeared in 3.9
-    from functools import cache
-except ImportError:
-    from functools import lru_cache as cache
+from functools import lru_cache
+from newscale.usbxpress import USBXpressDevice
 from serial import Serial
 from serial.tools.list_ports import comports as list_comports
 from sys import platform as PLATFORM
+
 if PLATFORM == 'win32':
-    from newscale.usbxpress import USBXpressLib, USBXpressDevice
+    from newscale.usbxpress import USBXpressLib
 
 VID_NEWSCALE = 0x10c4
 PID_NEWSCALE_COMPORT = 0xea60
 PID_NEWSCALE_USBX = 0xea61
 
 
-@cache
+@lru_cache(maxsize=None)
 def get_instances():
     """Factory function to get all New Scale USB Serial hubs, regardless
-    of VID/PID. These will be returned in a dict, keyed by serial number, where
-    the values are either Pyserial or NewScaleSerial objects.
+    of VID/PID. These will be returned in a dict, keyed by serial number (str),
+    where the values are either Pyserial or NewScaleSerial objects.
 
-    Usage:
-        instances = NewScaleSerial.get_instances()
-        -> [newScaleSerial1, newScaleSerial2]
-        for instance in instances:
-            print('serial number = ', instance.get_serial_number())
+    .. code-block:: python
+
+        instances = get_instances()
+        # -> {"46120": <class serial.serialposix.Serial>}
+
     """
     instances = {}
     if PLATFORM == 'linux':
@@ -33,7 +32,7 @@ def get_instances():
             if comport.vid == VID_NEWSCALE:
                 if comport.pid in [PID_NEWSCALE_COMPORT, PID_NEWSCALE_USBX]:
                     hwid = comport.hwid
-                    serial_number = hwid.split()[2].split('=')[1]
+                    serial_number = comport.serial_number
                     instances[serial_number] = (NewScaleSerial(serial_number,
                                                 pyserial_device=Serial(comport.device)))
     elif PLATFORM == 'win32':
@@ -49,7 +48,7 @@ def get_instances():
             if comport.vid == VID_NEWSCALE:
                 if comport.pid == PID_NEWSCALE_COMPORT:
                     hwid = comport.hwid
-                    serial_number = hwid.split()[2].split('=')[1]
+                    serial_number = comport.serial_number
                     instances[serial_number] = (NewScaleSerial(serial_number,
                                                 pyserial_device=Serial(comport.device)))
     return instances
@@ -58,9 +57,9 @@ def get_instances():
 class NewScaleSerial:
     """Wrapper for NewScale USB hubs with a pyserial-like interface."""
 
-    # FIXME: technically, we don't need to the serial number to create this
-    #   wrapper. Maybe we can infer it inside this class?
-    def __init__(self, serial_number, pyserial_device=None, usbxpress_device=None):
+    def __init__(self, serial_number: str, pyserial_device: Serial = None,
+                 usbxpress_device: USBXpressDevice = None):
+        self._baudrate = 0
         self.sn = serial_number
         if pyserial_device:
             self.t = 'pyserial'
@@ -78,7 +77,7 @@ class NewScaleSerial:
         if self.t == 'pyserial':
             return self.io.port
         elif self.t == 'usbxpress':
-            return self.get_serial_number()
+            return f"USBXpressDevice{self.io.device_num}"
 
     def get_serial_number(self):
         return self.sn
@@ -86,7 +85,7 @@ class NewScaleSerial:
     # Mimic pyserial interface for getting/setting baudrate
     @property
     def baudrate(self):
-        return self.io.baudrate
+        return self._baudrate
 
     @baudrate.setter
     def baudrate(self, baudrate: int):
@@ -94,13 +93,17 @@ class NewScaleSerial:
             self.io.baudrate = baudrate
         elif self.t == 'usbxpress':
             self.io.set_baud_rate(baudrate)
+        self._baudrate = baudrate
 
     def set_baudrate(self, baudrate: int):
         self.baudrate = baudrate
 
     @property
     def timeout(self):
-        return self.io.get_timeouts()[0]  # both timeouts are the same.
+        if self.t == 'pyserial':
+            return self.io.timeout
+        elif self.t == 'usbxpress':
+            return self.io.get_timeouts()[0]  # both timeouts are the same.
 
     @timeout.setter
     def timeout(self, seconds: float):

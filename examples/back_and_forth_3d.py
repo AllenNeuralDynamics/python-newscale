@@ -8,17 +8,18 @@ NewScaleSerial and moving it back and forth along all 3 axes.
 import sys
 
 from newscale.multistage import USBXYZStage
-from newscale.interfaces import NewScaleSerial, USBInterface
+from newscale.interfaces import USBInterface
+from newscale.new_scale_serial import NewScaleSerial, get_instances
 
 MIN_TRAVEL_UM = 0
 MAX_TRAVEL_UM = 15000
 
 # Create USBXYZStage
-instances = NewScaleSerial.get_instances()
+instances = list(get_instances().values())
 if len(instances) == 0:
     sys.exit(1)
-serialInstance = instances[0]
-stage = USBXYZStage(usb_interface=USBInterface(serialInstance))
+usb_interface = USBInterface(serial=instances[0])
+stage = USBXYZStage(usb_interface=usb_interface)
 
 # X-axis
 stage.move_absolute(x=1000)
