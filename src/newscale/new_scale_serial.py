@@ -134,7 +134,7 @@ class NewScaleSerial:
             chars_read = 0
             while True:
                 c = self.io.read(1)
-                data.append(c)
+                data += bytearray(c)
                 chars_read += 1
                 if c.endswith(expected) or (size is not None and chars_read == size):
                     break
