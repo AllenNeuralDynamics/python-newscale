@@ -126,6 +126,13 @@ class MultiStage:
                 return
         raise RuntimeError("Axes timed out trying to reach target position.")
 
+    def axes_on_target(self, *axes):
+        stats = {x: self.stages[x].get_closed_loop_state_and_position()[0]
+                 for x in axes}
+        return all([(not stats[x][StateBit.RUNNING])
+                and stats[x][StateBit.ON_TARGET]
+                for x in axes])
+
     @axis_check('wait')
     def move_relative(self, wait: bool = True, **axes: float):
         """Move the specified axes by a relative amount.
